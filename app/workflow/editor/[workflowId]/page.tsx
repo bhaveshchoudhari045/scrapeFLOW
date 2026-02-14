@@ -19,7 +19,11 @@ async function page({ params }: { params: Promise<{ workflowId: string }> }) {
   if (!workflow) {
     return <div>Workflow not found</div>;
   }
-  return <Editor workflow={workflow} />;
+  return (
+    <div className="flex flex-col h-screen w-full overflow-hidden">
+      <Editor workflow={workflow} />
+    </div>
+  );
 }
 
 export default page;

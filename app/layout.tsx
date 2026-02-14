@@ -26,9 +26,11 @@ export default function RootLayout({
         },
       }}
     >
-      <html lang="en">
-        <body className={inter.className}>
-          <AppProviders>{children}</AppProviders>
+      <html lang="en" className="h-full">
+        <body className={`${inter.className} h-full`}>
+          <AppProviders>
+            <div className="h-full">{children}</div>
+          </AppProviders>
           <Toaster richColors />
         </body>
       </html>
