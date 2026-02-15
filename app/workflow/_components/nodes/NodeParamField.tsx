@@ -5,13 +5,16 @@ import React, { useCallback } from "react";
 import StringParam from "./param/StringParam";
 import { useReactFlow } from "@xyflow/react";
 import { AppNode } from "@/types/appNode";
+import BrowserInstanceParam from "./param/BrowserInstanceParam";
 
 function NodeParamField({
   param,
   nodeId,
+  disabled,
 }: {
   param: TaskParam;
   nodeId: string;
+  disabled: boolean;
 }) {
   const { updateNodeData, getNode } = useReactFlow();
   const node = getNode(nodeId) as AppNode;
@@ -34,6 +37,14 @@ function NodeParamField({
         <StringParam
           param={param}
           value={value}
+          updateNodeParamValue={updateNodeParamValue}
+        />
+      );
+    case TaskParamType.BROWSER_INSTANCE:
+      return (
+        <BrowserInstanceParam
+          param={param}
+          value={""}
           updateNodeParamValue={updateNodeParamValue}
         />
       );
