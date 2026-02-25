@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Layers2Icon, Loader2 } from "lucide-react";
-import CustomDialogHeader from "@/components/ui/CustomDialogHeader";
+import CustomDialogHeader from "@/components/CustomDialogHeader";
 import {
   createWorkflowSchema,
   createWorkflowSchemaType,

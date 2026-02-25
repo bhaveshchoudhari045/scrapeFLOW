@@ -1,17 +1,11 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
-  //output   = "../lib/generated/prisma"
 }
 
-//42:01 he said not to change the below statements
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
-
 
 model Workflow {
   id String @id @default(cuid())
@@ -23,6 +17,39 @@ model Workflow {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt @default(now())
 
-  //User cannot have two workflows with the same name
+  executions WorkflowExecution[]
+
   @@unique([name, userId])
+}
+
+model WorkflowExecution {
+  id String @id @default(cuid())
+  workflowId String
+  userId String
+  trigger String
+  status String
+  createdAt DateTime @default(now())
+  startedAt DateTime?
+  completedAt DateTime?
+
+  phases ExecutionPhase[]
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model ExecutionPhase {
+  id String @id @default(cuid())
+  userId String
+  status String
+  number Int
+  node String
+  name String
+  startedAt DateTime?
+  completedAt DateTime?
+  inputs String?
+  outputs String?
+  creditCost Int?
+
+  workflowExecutionId String
+  execution WorkflowExecution @relation(fields: [workflowExecutionId], references: [id], onDelete: Cascade)
 }
