@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import React, { Suspense } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, InboxIcon, Workflow } from "lucide-react";
+import { AlertCircle, InboxIcon } from "lucide-react";
 import CreateWorkflowDialog from "./_components/CreateWorkflowDialog";
 import WorkflowCard from "./_components/WorkflowCard";
 

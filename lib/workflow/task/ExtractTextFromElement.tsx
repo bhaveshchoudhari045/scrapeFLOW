@@ -1,5 +1,5 @@
 import { TaskParamType, TaskType } from "@/types/task";
-import { CodeIcon, GlobeIcon, LucideProps, TextIcon } from "lucide-react";
+import { LucideProps, TextIcon } from "lucide-react";
 
 export const ExtractTextFromElementTask = {
   type: TaskType.EXTRACT_TEXT_FROM_ELEMENT,
