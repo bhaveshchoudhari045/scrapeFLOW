@@ -2,7 +2,7 @@
 import React from "react";
 
 function BrowserInstanceParam() {
-  return <div></div>;
+  return <div>Web page</div>;
 }
 
 export default BrowserInstanceParam;
