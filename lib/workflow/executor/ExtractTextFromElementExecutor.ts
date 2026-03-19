@@ -21,7 +21,7 @@ export async function ExtractTextFromElementExecutor(
       return false;
     }
 
-    const extractedText = $.text(element);
+    const extractedText = element.text();
     if (!extractedText) {
       console.error("Element has no text");
       return false;

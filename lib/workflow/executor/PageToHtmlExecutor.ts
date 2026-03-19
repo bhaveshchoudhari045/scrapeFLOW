@@ -9,6 +9,7 @@ export async function PageToHtmlExecutor(
   try {
     const html = await environment.getPage()!.content();
     console.log("@PAGE HTML", html);
+    environment.setOutput("Html", html);
 
     return true;
   } catch (error) {
