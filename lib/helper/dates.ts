@@ -1,8 +1,8 @@
 import { intervalToDuration } from "date-fns";
 
 export function DatesToDurationString(
-  end: Date | null | undefined,
   start: Date | null | undefined,
+  end: Date | null | undefined,
 ) {
   if (!start || !end) return null;
   const timeElapsed = end.getTime() - start.getTime();
