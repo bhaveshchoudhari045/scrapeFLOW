@@ -3,7 +3,7 @@ import React from "react";
 import { Separator } from "@/components/ui/separator";
 import { ModeToggle } from "@/components/ThemeModeToggle";
 
-function layout({ children }: { children: React.ReactNode }) {
+export default function layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col w-full h-screen">
       {children}
@@ -15,5 +15,3 @@ function layout({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
-export default layout;

@@ -10,6 +10,7 @@ export default function ExecutionViewerPage({
 }: {
   params: { workflowId: string; executionId: string };
 }) {
+  console.log("params:", params);
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden">
       <Topbar
