@@ -1,8 +1,7 @@
 "use client";
+import { ParamProps } from "@/types/appNode";
 import React from "react";
 
-function BrowserInstanceParam() {
+export default function BrowserInstanceParam({ param }: ParamProps) {
   return <div>Web page</div>;
 }
-
-export default BrowserInstanceParam;

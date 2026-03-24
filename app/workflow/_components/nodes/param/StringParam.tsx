@@ -36,8 +36,8 @@ function StringParam({
         className="text-xs"
         value={internalValue}
         placeholder="Enter value here"
-        onChange={(e) => setInternalValue(e.target.value)}
-        onBlur={(e) => updateNodeParamValue(e.target.value)}
+        onChange={(e: any) => setInternalValue(e.target.value)}
+        onBlur={(e: any) => updateNodeParamValue(e.target.value)}
       />
       {param.helperText && (
         <p className="text-muted-foreground text-xs px-2">{param.helperText}</p>
