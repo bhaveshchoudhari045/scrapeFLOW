@@ -54,6 +54,8 @@ function CreateCredentialDialog({
     },
     onSuccess: () => {
       toast.success("Credential created", { id: "create-credential" });
+      form.reset();
+      setOpen(false);
     },
     onError: (error: any) => {
       // 1. Log the full error to the terminal/console for debugging
@@ -76,13 +78,7 @@ function CreateCredentialDialog({
     [mutate],
   );
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(open) => {
-        form.reset();
-        setOpen(open);
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>{triggerText ?? "Create"}</Button>
       </DialogTrigger>
@@ -126,15 +122,14 @@ function CreateCredentialDialog({
                   <FormItem>
                     <FormLabel className="flex gap-1 items-center">
                       Value
-                      <p className="text-xs text-primary">
-                        (required)
-                      </p>
+                      <p className="text-xs text-primary">(required)</p>
                     </FormLabel>
                     <FormControl>
                       <Textarea className="resize-none" {...field} />
                     </FormControl>
                     <FormDescription>
-                      Enter the value associated with this credential <br /> This value will be securely encrypted and stored
+                      Enter the value associated with this credential <br />{" "}
+                      This value will be securely encrypted and stored
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

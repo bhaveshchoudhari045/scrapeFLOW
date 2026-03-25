@@ -6,6 +6,7 @@ import { GetCredentialsForUser } from "@/actions/credentials/getCredentialsForUs
 import { Card } from "@/components/ui/card";
 import CreateCredentialDialog from "./_components/CreateCredentialDialog";
 import { formatDistanceToNow } from "date-fns";
+import DeleteCredentialDialog from "./_components/DeleteCredentialDialog";
 export default function CredentialsPage() {
   return (
     <div className="flex flex-1 flex-col h-full">
@@ -73,6 +74,7 @@ async function UserCredentials() {
                 <p className="text-xs text-muted-foreground">{createdAt}</p>
               </div>
             </div>
+            <DeleteCredentialDialog name={credential.name} />
           </Card>
         );
       })}
