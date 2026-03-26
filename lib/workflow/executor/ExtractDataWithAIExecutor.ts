@@ -47,7 +47,7 @@ export async function ExtractDataWithAIExecutor(
         {
           role: "system",
           content:
-            "You are a webscraper helper that extracts data from HTML or text. You will be given a piece of text or HTML content as input and also the prompt with the data you have to extract. The response should always be only the extracted data as a JSON array or object, without any additional words or explanations. Analyze the input carefully and extract data precisely based on the prompt. If no data is found, return an empty JSON array. Work only with the provided content and ensure the output is always a valid JSON array without any surrounding text",
+            "You are a webscraper helper that extracts data from HTML or text. You will be given a piece of text or HTML content as input and also the prompt with the data you have to extract. The response should always be only the extracted data as a JSON array or object, without any additional words or explanations. Analyze the input carefully and extract data precisely based on the prompt. If no data is found, return an empty JSON array. Work only with the provided content and ensure the output is always a valid JSON array without any surrounding text. Never wrap the response in markdown code blocks or backticks.",
         },
         {
           role: "user",
@@ -72,7 +72,14 @@ export async function ExtractDataWithAIExecutor(
       return false;
     }
 
-    environment.setOutput("Extracted data", result);
+    // Add this ↓
+    const cleanResult = result
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/, "")
+      .replace(/```\s*$/, "")
+      .trim();
+
+    environment.setOutput("Extracted data", cleanResult); // ← use cleanResult
     return true;
   } catch (error: any) {
     environment.log.error(error.message);

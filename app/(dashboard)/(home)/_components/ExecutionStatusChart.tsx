@@ -25,15 +25,13 @@ type ChartData = Awaited<ReturnType<typeof GetWorkflowExecutionStats>>;
 const chartConfig = {
   success: {
     label: "Success",
-
-    color: "hsl(var(--chart-2))",
+    color: "oklch(var(--chart-2))",
   },
   failed: {
     label: "Failed",
-
-    color: "hsl(var(--chart-1))",
+    color: "oklch(var(--destructive))",
   },
-};
+} satisfies ChartConfig;
 export default function ExecutionStatusChart({ data }: { data: ChartData }) {
   return (
     <Card>
@@ -69,10 +67,28 @@ export default function ExecutionStatusChart({ data }: { data: ChartData }) {
                 });
               }}
             />
-            <ChartLegend />
-            <ChartTooltip />
-            <Area dataKey={"success"} />
-            <Area dataKey={"failed"} />
+            <ChartLegend content={<ChartLegendContent />} />
+            <ChartTooltip
+              content={<ChartTooltipContent className="w-[250px]" />}
+            />
+            <Area
+              min={0}
+              type="monotone"
+              fillOpacity={0.6}
+              fill="var(--color-success)"
+              stroke="var(--color-success)"
+              dataKey="success"
+              stackId="a"
+            />
+            <Area
+              min={0}
+              type="monotone"
+              fillOpacity={0.6}
+              fill="var(--color-failed)"
+              stroke="var(--color-failed)"
+              dataKey="failed"
+              stackId="a"
+            />
           </AreaChart>
         </ChartContainer>
       </CardContent>

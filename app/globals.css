@@ -87,11 +87,11 @@
   }
 }
 
+.react-flow__attribution {
+  background: transparent !important;
+}
 .dark {
   .react-flow__controls-button {
-    background: transparent !important;
-  }
-  .react-flow__attribution {
     @apply !bg-accent;
   }
 }
