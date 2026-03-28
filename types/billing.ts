@@ -9,7 +9,7 @@ export type CreditsPack = {
   name: string;
   label: string;
   credits: number;
-  price: number;
+  price: number; // in paise (INR smallest unit, like cents)
 };
 
 export const CreditsPack: CreditsPack[] = [
@@ -18,21 +18,21 @@ export const CreditsPack: CreditsPack[] = [
     name: "Small Pack",
     label: "1,000 credits",
     credits: 1000,
-    price: 999,
+    price: 9900, // ₹99
   },
   {
     id: PackId.MEDIUM,
     name: "Medium Pack",
     label: "5,000 credits",
     credits: 5000,
-    price: 3999,
+    price: 39900, // ₹399
   },
   {
     id: PackId.LARGE,
     name: "Large Pack",
     label: "10,000 credits",
     credits: 10000,
-    price: 6999,
+    price: 69900, // ₹699
   },
 ];
 

@@ -10,21 +10,55 @@ import {
 } from "@/components/ui/card";
 import { CoinsIcon, CreditCard } from "lucide-react";
 import { CreditsPack, PackId } from "@/types/billing";
-import { RadioGroup } from "@/components/ui/radio-group";
-import { RadioGroupItem } from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { PurchaseCredits } from "@/actions/billing/purchaseCredits";
+import { useRouter } from "next/navigation";
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 export default function CreditsPurchase() {
-  const [selectedPack, setSelectedPack] = useState(PackId.MEDIUM);
+  const [selectedPack, setSelectedPack] = useState<string>(PackId.MEDIUM); // ✅ string, not PackId
+  const router = useRouter();
 
   const mutation = useMutation({
-    mutationFn: PurchaseCredits,
-    onSuccess: () => {},
-    onError: () => {},
+    mutationFn: (packId: string) => PurchaseCredits(packId as PackId), // ✅ cast inside, pass string
+    onSuccess: (data) => {
+      const options = {
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency,
+        name: "ScrapeFlow",
+        description: "Purchase Credits",
+        order_id: data.orderId,
+        handler: function (response: any) {
+          console.log("✅ Payment success:", response);
+          router.refresh();
+        },
+        modal: {
+          ondismiss: function () {
+            console.log("❌ Modal dismissed without payment");
+          },
+        },
+        theme: {
+          color: "#6366f1",
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    },
+    onError: (error) => {
+      console.error("Purchase failed", error);
+    },
   });
+
   return (
     <Card>
       <CardHeader>
@@ -38,7 +72,7 @@ export default function CreditsPurchase() {
       </CardHeader>
       <CardContent>
         <RadioGroup
-          onValueChange={(value) => setSelectedPack(value as PackId)}
+          onValueChange={(value) => setSelectedPack(value)}
           value={selectedPack}
         >
           {CreditsPack.map((pack) => (
@@ -53,7 +87,7 @@ export default function CreditsPurchase() {
                   {pack.name} - {pack.label}
                 </span>
                 <span className="font-bold text-primary">
-                  ${(pack.price / 100).toFixed(2)}
+                  ₹{(pack.price / 100).toFixed(2)}
                 </span>
               </Label>
             </div>
@@ -64,12 +98,10 @@ export default function CreditsPurchase() {
         <Button
           className="w-full"
           disabled={mutation.isPending}
-          onClick={() => {
-            mutation.mutate(selectedPack);
-          }}
+          onClick={() => mutation.mutate(selectedPack)}
         >
           <CreditCard className="mr-2 h-5 w-5" />
-          Purchase credits
+          Purchase Credits
         </Button>
       </CardFooter>
     </Card>

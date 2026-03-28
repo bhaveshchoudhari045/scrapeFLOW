@@ -1,126 +1,113 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# zrok - Secure internet sharing made simple
 
-## Getting Started
+![zrok logo](docs/images/zrok_cover.png)
 
-First, run the development server:
+**Share anything, anywhere, instantly. Enterprise reliability. No firewall changes. No port forwarding. No hassle.**
+
+zrok lets you securely share web services, files, and network resources with anyone—whether they're across the internet or your private network. Built on zero-trust networking, it works through firewalls and NAT without requiring any network configuration changes.
+
+## Quick start
+
+Get sharing in under 2 minutes:
+
+1. **[Install zrok](https://docs.zrok.io/docs/guides/install/)** for your platform
+2. **Get an account**: `zrok invite` (use the free [zrok.io service](https://docs.zrok.io/docs/getting-started/))
+3. **Enable sharing**: `zrok enable`
+
+That's it! Now you can share anything:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Share a web service publicly
+$ zrok share public localhost:8080
+
+# Share files as a network drive  
+$ zrok share public --backend-mode drive ~/Documents
+
+# Share privately with other zrok users
+$ zrok share private localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+![zrok Web Console](docs/images/zrok_web_console.png)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## What you can share
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+### Web services
 
-## Learn More
+Instantly make local web apps accessible over the internet:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+zrok share public localhost:8080
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+![zrok share public](docs/images/zrok_share_public.png)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+### Files & directories
 
-## Deploy on Vercel
+Turn any folder into a shareable network drive:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+zrok share public --backend-mode drive ~/Repos/zrok
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+![zrok share public -b drive](docs/images/zrok_share_public_drive.png)
+![mounted zrok drive](docs/images/zrok_share_public_drive_explorer.png)
 
-{
-  "name": "scrape-flow-new",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "postinstall": "prisma generate"
-  },
-  "dependencies": {
-    "@clerk/nextjs": "^5.3.2",
-    "@hookform/resolvers": "^5.2.2",
-    "@prisma/client": "^6.19.2",
-    "@radix-ui/react-accordion": "^1.2.12",
-    "@radix-ui/react-alert-dialog": "^1.1.15",
-    "@radix-ui/react-aspect-ratio": "^1.1.8",
-    "@radix-ui/react-avatar": "^1.1.11",
-    "@radix-ui/react-checkbox": "^1.3.3",
-    "@radix-ui/react-collapsible": "^1.1.12",
-    "@radix-ui/react-context-menu": "^2.2.16",
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-dropdown-menu": "^2.1.16",
-    "@radix-ui/react-hover-card": "^1.1.15",
-    "@radix-ui/react-label": "^2.1.8",
-    "@radix-ui/react-menubar": "^1.1.16",
-    "@radix-ui/react-navigation-menu": "^1.2.14",
-    "@radix-ui/react-popover": "^1.1.15",
-    "@radix-ui/react-progress": "^1.1.8",
-    "@radix-ui/react-radio-group": "^1.3.8",
-    "@radix-ui/react-scroll-area": "^1.2.10",
-    "@radix-ui/react-select": "^2.2.6",
-    "@radix-ui/react-separator": "^1.1.8",
-    "@radix-ui/react-slider": "^1.3.6",
-    "@radix-ui/react-slot": "^1.2.4",
-    "@radix-ui/react-switch": "^1.2.6",
-    "@radix-ui/react-tabs": "^1.1.13",
-    "@radix-ui/react-toast": "^1.2.15",
-    "@radix-ui/react-toggle": "^1.1.10",
-    "@radix-ui/react-toggle-group": "^1.1.11",
-    "@radix-ui/react-tooltip": "^1.2.8",
-    "@tanstack/react-query": "^5.90.20",
-    "@xyflow/react": "^12.10.0",
-    "cheerio": "^1.1.0",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "cmdk": "^1.1.1",
-    "date-fns": "^4.1.0",
-    "embla-carousel-react": "^8.6.0",
-    "input-otp": "^1.4.2",
-    "lucide-react": "^0.562.0",
-    "next": "14.2.5",
-    "next-themes": "^0.4.6",
-    "puppeteer": "^24.37.5",
-    "react": "^18",
-    "react-day-picker": "^9.13.0",
-    "react-dom": "^18",
-    "react-hook-form": "^7.71.1",
-    "react-resizable-panels": "^4.4.1",
-    "recharts": "^2.15.4",
-    "sonner": "^2.0.7",
-    "tailwind-merge": "^3.4.0",
-    "tailwindcss-animate": "^1.0.7",
-    "vaul": "^1.1.2",
-    "zod": "^4.3.5"
-  },
-  "devDependencies": {
-    "@eslint/css": "^0.14.1",
-    "@eslint/js": "^9.39.2",
-    "@eslint/json": "^0.14.0",
-    "@eslint/markdown": "^7.5.1",
-    "@tanstack/react-query-devtools": "^5.91.2",
-    "@types/node": "^20",
-    "@types/react": "^18.3.27",
-    "@types/react-dom": "^18.3.7",
-    "autoprefixer": "^10.4.23",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.5",
-    "eslint-plugin-react": "^7.37.5",
-    "globals": "^17.0.0",
-    "jiti": "^2.6.1",
-    "postcss": "^8",
-    "prisma": "^6.19.2",
-    "tailwindcss": "^3.4.19",
-    "typescript": "^5",
-    "typescript-eslint": "^8.53.1"
-  }
-}
+### Private resources
+
+Share TCP/UDP services securely with other zrok users—no public internet exposure.
+
+## Key features
+
+- **Zero Configuration**: Works through firewalls, NAT, and corporate networks
+- **Secure by Default**: End-to-end encryption with zero-trust architecture  
+- **Public & Private Sharing**: Share with anyone or just specific users
+- **Multiple Protocols**: HTTP/HTTPS, TCP, UDP, and file sharing
+- **Cross-Platform**: Windows, macOS, Linux, and Raspberry Pi
+- **Self-Hostable**: Run your own zrok service instance
+
+## How it works
+
+zrok is built on [OpenZiti](https://docs.openziti.io/docs/learn/introduction/), a programmable zero-trust network overlay. This means:
+
+- **No inbound connectivity required**: Works from behind firewalls and NAT
+- **End-to-end encryption**: All traffic is encrypted, even from zrok servers
+- **Peer-to-peer connections**: Direct connections between users when possible
+- **Identity-based access**: Share with specific users, not IP addresses
+
+## Developer SDK
+
+Embed zrok sharing into your applications with our Go SDK:
+
+```go
+// Create a share
+shr, err := sdk.CreateShare(root, &sdk.ShareRequest{
+    BackendMode: sdk.TcpTunnelBackendMode,
+    ShareMode:   sdk.PrivateShareMode,
+})
+
+// Accept connections
+listener, err := sdk.NewListener(shr.Token, root)
+```
+
+[Read the SDK guide](https://blog.openziti.io/the-zrok-sdk) for complete examples.
+
+## Self-hosting
+
+Run your own zrok service—from Raspberry Pi to enterprise scale:
+
+- Single binary contains everything you need
+- Scales from small personal instances to large public services
+- Built on the same codebase as the public zrok.io service
+
+[Self-Hosting Guide](https://docs.zrok.io/docs/guides/self-hosting/self_hosting_guide/)
+
+## Resources
+
+- **[Documentation](https://docs.zrok.io/)**
+- **[Office Hours Videos](https://www.youtube.com/watch?v=Edqv7yRmXb0&list=PLMUj_5fklasLuM6XiCNqwAFBuZD1t2lO2)**
+- **[Building from source](./BUILD.md)**
+- **[Contributing](./CONTRIBUTING.md)**
+
+---
+
+*Ready to start sharing? [Get started with zrok →](https://docs.zrok.io/docs/getting-started)*

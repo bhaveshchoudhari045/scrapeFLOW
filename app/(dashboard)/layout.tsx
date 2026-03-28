@@ -4,6 +4,7 @@ import { ModeToggle } from "@/components/ThemeModeToggle";
 import { Separator } from "@/components/ui/separator";
 import React from "react";
 import { SignedIn, UserButton } from "@clerk/nextjs";
+
 function layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen">

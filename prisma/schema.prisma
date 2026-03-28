@@ -104,3 +104,13 @@ model Credential{
 
   @@unique([userId, name])
 }
+
+model UserPurchase{
+  id String @id @default(cuid())
+  userId String
+  razorpayId String
+  description String
+  amount String
+  currency String
+  date DateTime @default(now())
+}
