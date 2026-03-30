@@ -1,0 +1,162 @@
+/* ────────────────────────────────────────────────────
+   AIXPLORE — styles to add to your globals.css
+   ──────────────────────────────────────────────────── */
+
+/* ── AIXPLORE dark mode transformation ── */
+.aixplore-mode {
+  --background: 10 10 15;
+  --foreground: 232 234 240;
+  --card: 17 17 24;
+  --card-foreground: 232 234 240;
+  --border: 255 255 255 / 0.08;
+  --muted: 255 255 255 / 0.04;
+  --muted-foreground: 160 163 180;
+  --primary: 110 231 247; /* electric cyan */
+  --primary-foreground: 10 10 15;
+}
+
+.aixplore-mode body,
+.aixplore-mode main,
+.aixplore-mode [data-layout] {
+  background: #0a0a0f;
+  color: #e8eaf0;
+  transition:
+    background 0.7s ease,
+    color 0.7s ease;
+}
+
+/* ── Glassmorphism cards inside AIXPLORE panel ── */
+.aixplore-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+/* In light mode, just use normal card style */
+:not(.aixplore-mode) .aixplore-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  backdrop-filter: none;
+}
+
+/* ── AIXPLORE heading accent ── */
+.aixplore-mode .aixplore-heading {
+  color: #6ee7f7;
+  letter-spacing: 0.15em;
+}
+
+/* ── AIXPLORE stat numbers ── */
+.aixplore-mode .aixplore-stat {
+  color: #6ee7f7;
+}
+
+/* ── AIXPLORE button ── */
+.aixplore-btn {
+  background: linear-gradient(135deg, #111118, #1a1a28);
+  color: #6ee7f7;
+  border: 1px solid rgba(110, 231, 247, 0.4);
+  box-shadow:
+    0 0 20px rgba(110, 231, 247, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.aixplore-btn:hover {
+  border-color: rgba(110, 231, 247, 0.8);
+  box-shadow:
+    0 0 40px rgba(110, 231, 247, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+  color: #a5f0fb;
+}
+
+.aixplore-btn:active {
+  transform: translateY(0);
+}
+
+.aixplore-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Shimmer effect */
+.btn-shimmer {
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(110, 231, 247, 0.15) 50%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+/* ── AIXPLORE panel slide-in ── */
+.aixplore-panel {
+  border-top: 1px solid rgba(110, 231, 247, 0.2);
+  padding-top: 2rem;
+}
+
+.aixplore-mode .aixplore-panel {
+  border-top-color: rgba(110, 231, 247, 0.3);
+}
+
+/* ── Custom thin cyan scrollbar for aixplore mode ── */
+.aixplore-mode ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.aixplore-mode ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.aixplore-mode ::-webkit-scrollbar-thumb {
+  background: rgba(110, 231, 247, 0.3);
+  border-radius: 2px;
+}
+.aixplore-mode ::-webkit-scrollbar-thumb:hover {
+  background: rgba(110, 231, 247, 0.6);
+}
+
+/* ── Animation helpers ── */
+@keyframes slide-in-from-bottom-8 {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.slide-in-from-bottom-8 {
+  animation: slide-in-from-bottom-8 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.duration-500 {
+  animation-duration: 0.5s;
+}
+
+/* ── Suggestion chip hover ── */
+.aixplore-mode button[class*="rounded-full"] {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(232, 234, 240, 0.6);
+}
+.aixplore-mode button[class*="rounded-full"]:hover {
+  border-color: rgba(110, 231, 247, 0.5);
+  color: #6ee7f7;
+}

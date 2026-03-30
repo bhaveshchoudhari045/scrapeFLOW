@@ -1,7 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+/* @import "../styles/aixplore.css"; */
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -94,4 +94,1112 @@
   .react-flow__controls-button {
     @apply !bg-accent;
   }
+}
+
+/* enhancement */
+/* ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
+/* ============================================================
+   AIXPLORE V4 — Premium Dark UI
+   Paste this at the BOTTOM of your app/globals.css
+   Replace everything previously added from aixplore.css
+   ============================================================ */
+
+/* Google Fonts — add this to app/layout.tsx head or globals.css @import */
+@import url("https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+/* ── CSS custom properties for AIXPLORE dark theme ── */
+:root {
+  --ax-bg: #08080f;
+  --ax-surface: #0f0f1a;
+  --ax-surface2: #141428;
+  --ax-border: rgba(255, 255, 255, 0.07);
+  --ax-cyan: #6ee7f7;
+  --ax-cyan-dim: rgba(110, 231, 247, 0.12);
+  --ax-cyan-glow: rgba(110, 231, 247, 0.25);
+  --ax-gold: #f5c842;
+  --ax-violet: #a78bfa;
+  --ax-coral: #f87171;
+  --ax-green: #4ade80;
+  --ax-text: #e8eaf0;
+  --ax-text-dim: rgba(232, 234, 240, 0.5);
+  --ax-text-faint: rgba(232, 234, 240, 0.28);
+}
+
+/* ── AIXPLORE MODE — body override ── */
+.aixplore-active {
+  background: var(--ax-bg) !important;
+  color: var(--ax-text) !important;
+}
+
+.aixplore-active * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(110, 231, 247, 0.3) transparent;
+}
+
+.aixplore-active ::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+.aixplore-active ::-webkit-scrollbar-thumb {
+  background: rgba(110, 231, 247, 0.3);
+  border-radius: 2px;
+}
+
+/* ── Page wrapper when AIXPLORE is active ── */
+.ax-page {
+  min-height: 100vh;
+  background: var(--ax-bg);
+  background-image:
+    radial-gradient(
+      ellipse 80% 50% at 50% -20%,
+      rgba(110, 231, 247, 0.06) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 80% 80%,
+      rgba(167, 139, 250, 0.04) 0%,
+      transparent 50%
+    );
+  color: var(--ax-text);
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Header ── */
+.ax-header {
+  border-bottom: 1px solid var(--ax-border);
+  background: rgba(8, 8, 15, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 0.875rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ax-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.ax-logo-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    var(--ax-cyan-dim),
+    rgba(167, 139, 250, 0.15)
+  );
+  border: 1px solid rgba(110, 231, 247, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ax-cyan);
+  font-family: "Syne", sans-serif;
+}
+
+.ax-logo-text {
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--ax-text);
+  letter-spacing: 0.02em;
+}
+
+.ax-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--ax-text-dim);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.ax-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ax-green);
+  box-shadow: 0 0 8px var(--ax-green);
+  animation: ax-pulse 2s ease-in-out infinite;
+}
+
+/* ── Search area ── */
+.ax-search-wrap {
+  position: relative;
+}
+
+.ax-textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: none;
+  background: var(--ax-surface);
+  border: 1px solid var(--ax-border);
+  border-radius: 16px;
+  padding: 1rem 9rem 1rem 1.25rem;
+  font-size: 0.875rem;
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--ax-text);
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+  line-height: 1.6;
+}
+
+.ax-textarea::placeholder {
+  color: var(--ax-text-faint);
+}
+
+.ax-textarea:focus {
+  border-color: rgba(110, 231, 247, 0.4);
+  box-shadow:
+    0 0 0 3px rgba(110, 231, 247, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.ax-scrape-btn {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 10px;
+  background: var(--ax-cyan);
+  color: #08080f;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: "Syne", sans-serif;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ax-scrape-btn:hover {
+  background: #a5f0fb;
+  box-shadow: 0 0 20px rgba(110, 231, 247, 0.4);
+  transform: translateY(-1px);
+}
+
+.ax-scrape-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Suggestion chips ── */
+.ax-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.ax-chip {
+  padding: 0.375rem 0.875rem;
+  border-radius: 100px;
+  border: 1px solid var(--ax-border);
+  font-size: 0.7rem;
+  color: var(--ax-text-dim);
+  background: transparent;
+  cursor: pointer;
+  font-family: "IBM Plex Mono", monospace;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.ax-chip:hover {
+  border-color: rgba(110, 231, 247, 0.4);
+  color: var(--ax-cyan);
+  background: var(--ax-cyan-dim);
+}
+
+/* ── View toggle ── */
+.ax-toggle-group {
+  display: flex;
+  background: var(--ax-surface);
+  border: 1px solid var(--ax-border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.ax-toggle-btn {
+  padding: 0.375rem 0.875rem;
+  border-radius: 7px;
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--ax-text-dim);
+  background: transparent;
+}
+
+.ax-toggle-btn.active {
+  background: rgba(110, 231, 247, 0.12);
+  color: var(--ax-cyan);
+  box-shadow: inset 0 1px 0 rgba(110, 231, 247, 0.15);
+}
+
+/* ── Download buttons ── */
+.ax-dl-btn {
+  padding: 0.4rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid var(--ax-border);
+  background: transparent;
+  color: var(--ax-text-dim);
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ax-dl-btn:hover {
+  border-color: rgba(110, 231, 247, 0.3);
+  color: var(--ax-cyan);
+  background: var(--ax-cyan-dim);
+}
+
+/* ── Data cards (RAW / STRUCTURED / TABLE) ── */
+.ax-data-card {
+  background: var(--ax-surface);
+  border: 1px solid var(--ax-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.ax-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.ax-table thead {
+  background: rgba(255, 255, 255, 0.03);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.ax-table th {
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+  color: var(--ax-text-faint);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.65rem;
+  border-bottom: 1px solid var(--ax-border);
+}
+
+.ax-table td {
+  padding: 0.5rem 0.875rem;
+  color: var(--ax-text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ax-table tr:hover td {
+  background: rgba(110, 231, 247, 0.03);
+}
+
+.ax-row-num {
+  color: var(--ax-text-faint) !important;
+  font-size: 0.65rem !important;
+}
+
+/* Structured record cards */
+.ax-record {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--ax-border);
+  display: grid;
+  gap: 0.375rem;
+}
+
+.ax-record:last-child {
+  border-bottom: none;
+}
+
+.ax-record-num {
+  font-size: 0.6rem;
+  color: var(--ax-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.25rem;
+}
+
+.ax-kv {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.ax-key {
+  font-size: 0.68rem;
+  color: var(--ax-cyan);
+  min-width: 70px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ax-val {
+  font-size: 0.78rem;
+  color: var(--ax-text);
+  line-height: 1.4;
+}
+
+/* Raw text */
+.ax-raw {
+  padding: 1rem 1.25rem;
+  font-size: 0.72rem;
+  color: var(--ax-text-dim);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+/* ── Images grid ── */
+.ax-images-toggle {
+  background: none;
+  border: none;
+  color: var(--ax-text-faint);
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  transition: color 0.2s;
+}
+
+.ax-images-toggle:hover {
+  color: var(--ax-cyan);
+}
+
+.ax-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.ax-img {
+  border-radius: 8px;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  width: 100%;
+  background: var(--ax-surface);
+  border: 1px solid var(--ax-border);
+}
+
+/* ── AIXPLORE BUTTON — the centerpiece ── */
+.ax-btn-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0 1rem;
+}
+
+.ax-cta-btn {
+  position: relative;
+  padding: 1rem 2.5rem;
+  border-radius: 100px;
+  background: transparent;
+  border: 1px solid rgba(110, 231, 247, 0.35);
+  color: var(--ax-cyan);
+  font-family: "Syne", sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow:
+    0 0 20px rgba(110, 231, 247, 0.1),
+    inset 0 1px 0 rgba(110, 231, 247, 0.1);
+}
+
+.ax-cta-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(110, 231, 247, 0.08) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: ax-shimmer 2.5s ease-in-out infinite;
+}
+
+.ax-cta-btn:hover {
+  border-color: rgba(110, 231, 247, 0.8);
+  color: #fff;
+  box-shadow:
+    0 0 50px rgba(110, 231, 247, 0.25),
+    0 0 100px rgba(110, 231, 247, 0.1),
+    inset 0 1px 0 rgba(110, 231, 247, 0.2);
+  transform: translateY(-2px) scale(1.02);
+}
+
+.ax-cta-btn:active {
+  transform: scale(0.98);
+}
+
+.ax-cta-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  animation: none;
+}
+
+.ax-cta-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.ax-cta-icon {
+  font-size: 1.1rem;
+  animation: ax-rotate 4s linear infinite;
+}
+
+/* ── AIXPLORE PANEL ── */
+.ax-panel {
+  margin-top: 2rem;
+  space-y: 1.5rem;
+  animation: ax-slideup 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ax-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--ax-border);
+  margin-bottom: 1.5rem;
+}
+
+.ax-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.ax-panel-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(110, 231, 247, 0.15),
+    rgba(167, 139, 250, 0.1)
+  );
+  border: 1px solid rgba(110, 231, 247, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.ax-panel-name {
+  font-family: "Syne", sans-serif;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--ax-cyan);
+  text-transform: uppercase;
+}
+
+.ax-panel-sub {
+  font-size: 0.7rem;
+  color: var(--ax-text-faint);
+  letter-spacing: 0.08em;
+  margin-top: 0.1rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.ax-close-btn {
+  background: none;
+  border: 1px solid var(--ax-border);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--ax-text-dim);
+  cursor: pointer;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.ax-close-btn:hover {
+  border-color: var(--ax-coral);
+  color: var(--ax-coral);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+/* ── Section label ── */
+.ax-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 0.65rem;
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ax-text-faint);
+  margin-bottom: 0.875rem;
+}
+
+.ax-section-label::before {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+/* ── Glass card (summary, prediction, etc) ── */
+.ax-glass {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ax-border);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 1.25rem;
+  transition: border-color 0.2s;
+}
+
+.ax-glass:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ── Summary text ── */
+.ax-summary-text {
+  font-size: 0.875rem;
+  line-height: 1.75;
+  color: var(--ax-text);
+  margin-bottom: 1rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* ── Audio controls ── */
+.ax-audio-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--ax-border);
+}
+
+.ax-audio-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-radius: 100px;
+  border: 1px solid var(--ax-border);
+  background: transparent;
+  color: var(--ax-text-dim);
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ax-audio-btn:hover,
+.ax-audio-btn.playing {
+  border-color: rgba(110, 231, 247, 0.4);
+  color: var(--ax-cyan);
+  background: var(--ax-cyan-dim);
+}
+
+.ax-audio-stop {
+  background: none;
+  border: none;
+  color: var(--ax-text-faint);
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+  cursor: pointer;
+  transition: color 0.2s;
+  padding: 0.4rem;
+}
+
+.ax-audio-stop:hover {
+  color: var(--ax-coral);
+}
+
+/* ── Best use case ── */
+.ax-usecase {
+  padding-top: 0.875rem;
+  margin-top: 0.875rem;
+  border-top: 1px solid var(--ax-border);
+}
+
+.ax-usecase-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ax-gold);
+  margin-bottom: 0.4rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.ax-usecase-text {
+  font-size: 0.8rem;
+  color: var(--ax-text-dim);
+  line-height: 1.6;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* ── Stats grid ── */
+.ax-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.625rem;
+}
+
+@media (min-width: 640px) {
+  .ax-stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.ax-stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ax-border);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.ax-stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--ax-cyan-dim),
+    transparent
+  );
+}
+
+.ax-stat-card:hover {
+  border-color: rgba(110, 231, 247, 0.2);
+  background: rgba(110, 231, 247, 0.04);
+}
+
+.ax-stat-val {
+  font-family: "Syne", sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ax-cyan);
+  line-height: 1;
+}
+
+.ax-stat-label {
+  font-size: 0.62rem;
+  color: var(--ax-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* ── Prediction card ── */
+.ax-pred-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ax-border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ax-pred-card::after {
+  content: "";
+  position: absolute;
+  top: -40%;
+  right: -20%;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--ax-pred-glow, rgba(110, 231, 247, 0.06)) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.ax-pred-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.ax-pred-result {
+  font-family: "Syne", sans-serif;
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.ax-pred-result.bullish {
+  color: var(--ax-green);
+}
+.ax-pred-result.bearish {
+  color: var(--ax-coral);
+}
+.ax-pred-result.neutral {
+  color: var(--ax-gold);
+}
+.ax-pred-result.optimistic {
+  color: var(--ax-green);
+}
+.ax-pred-result.critical {
+  color: var(--ax-coral);
+}
+.ax-pred-result.excited {
+  color: var(--ax-violet);
+}
+.ax-pred-result.discovery {
+  color: var(--ax-violet);
+}
+.ax-pred-result.research {
+  color: var(--ax-cyan);
+}
+.ax-pred-result.default {
+  color: var(--ax-cyan);
+}
+
+.ax-pred-confidence {
+  text-align: right;
+}
+
+.ax-pred-pct {
+  font-family: "Syne", sans-serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--ax-text);
+}
+
+.ax-pred-pct-label {
+  font-size: 0.62rem;
+  color: var(--ax-text-faint);
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Confidence bar */
+.ax-conf-bar-track {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.ax-conf-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--ax-cyan), var(--ax-violet));
+  transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.ax-conf-bar-fill::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ax-violet);
+  box-shadow: 0 0 8px var(--ax-violet);
+}
+
+.ax-pred-reason {
+  font-size: 0.78rem;
+  color: var(--ax-text-dim);
+  line-height: 1.65;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* ── Insight pills ── */
+.ax-insight-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ax-insight-pill {
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--ax-border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ax-insight-pill:hover {
+  border-color: rgba(110, 231, 247, 0.25);
+  background: rgba(110, 231, 247, 0.03);
+}
+
+.ax-insight-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+}
+
+.ax-insight-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ax-insight-dot.high {
+  background: var(--ax-cyan);
+  box-shadow: 0 0 6px var(--ax-cyan);
+}
+.ax-insight-dot.medium {
+  background: var(--ax-violet);
+  box-shadow: 0 0 6px var(--ax-violet);
+}
+
+.ax-insight-text {
+  font-size: 0.8rem;
+  color: var(--ax-text);
+  flex: 1;
+  font-family: "IBM Plex Mono", monospace;
+  line-height: 1.4;
+}
+
+.ax-insight-badge {
+  font-size: 0.6rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 100px;
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+.ax-insight-badge.high {
+  background: rgba(110, 231, 247, 0.1);
+  color: var(--ax-cyan);
+}
+.ax-insight-badge.medium {
+  background: rgba(167, 139, 250, 0.1);
+  color: var(--ax-violet);
+}
+
+.ax-insight-chevron {
+  font-size: 0.6rem;
+  color: var(--ax-text-faint);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.ax-insight-pill.open .ax-insight-chevron {
+  transform: rotate(180deg);
+}
+
+.ax-insight-expand {
+  padding: 0 1rem 0.75rem 2.25rem;
+  font-size: 0.72rem;
+  color: var(--ax-text-faint);
+  font-family: "IBM Plex Mono", monospace;
+  line-height: 1.5;
+  border-top: 1px solid var(--ax-border);
+  padding-top: 0.625rem;
+}
+
+/* ── Chart card ── */
+.ax-chart-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--ax-border);
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.ax-chart-card .recharts-cartesian-grid-horizontal line,
+.ax-chart-card .recharts-cartesian-grid-vertical line {
+  stroke: rgba(255, 255, 255, 0.05) !important;
+}
+
+.ax-chart-card .recharts-text {
+  fill: var(--ax-text-faint) !important;
+}
+
+/* ── Spacing helpers ── */
+.ax-section {
+  margin-bottom: 1.75rem;
+}
+.ax-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+/* ── Animations ── */
+@keyframes ax-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 8px var(--ax-green);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 3px var(--ax-green);
+  }
+}
+
+@keyframes ax-shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+@keyframes ax-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ax-slideup {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ax-fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ax-stagger-1 {
+  animation: ax-fadein 0.4s 0.1s both;
+}
+.ax-stagger-2 {
+  animation: ax-fadein 0.4s 0.2s both;
+}
+.ax-stagger-3 {
+  animation: ax-fadein 0.4s 0.3s both;
+}
+.ax-stagger-4 {
+  animation: ax-fadein 0.4s 0.4s both;
+}
+.ax-stagger-5 {
+  animation: ax-fadein 0.4s 0.5s both;
+}
+.ax-stagger-6 {
+  animation: ax-fadein 0.4s 0.6s both;
+}
+
+/* ── Loading spinner ── */
+.ax-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(8, 8, 15, 0.3);
+  border-top-color: #08080f;
+  border-radius: 50%;
+  animation: ax-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.ax-spinner-light {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(110, 231, 247, 0.2);
+  border-top-color: var(--ax-cyan);
+  border-radius: 50%;
+  animation: ax-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ax-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── No data / error state ── */
+.ax-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--ax-text-faint);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.ax-error-toast {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+  color: var(--ax-coral);
+  font-family: "IBM Plex Mono", monospace;
 }

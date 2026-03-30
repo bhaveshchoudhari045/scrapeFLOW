@@ -15,7 +15,7 @@ import { NavigateUrlTask } from "./NavigateUrlTask";
 import { ScrollToElementTask } from "./ScrollToElement";
 
 type Registry = {
-  [k in TaskType]: WorkflowTask;
+  [k in TaskType]: WorkflowTask & { type: k };
 };
 
 export const TaskRegistry: Registry = {

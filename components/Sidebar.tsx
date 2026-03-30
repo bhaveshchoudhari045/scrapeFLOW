@@ -7,6 +7,7 @@ import {
   HomeIcon,
   Layers2Icon,
   MenuIcon,
+  SearchIcon,
   ShieldCheckIcon,
 } from "lucide-react";
 import Logo from "./Logo";
@@ -17,7 +18,7 @@ import UserAvailableCreditsBadge from "./UserAvailableCreditsBadge";
 import { GetAvailableCredits } from "@/actions/billing/getAvailableCredits";
 const routes = [
   {
-    href: "",
+    href: "dashboard",
     lable: "Home",
     icon: HomeIcon,
   },
@@ -25,6 +26,11 @@ const routes = [
     href: "workflows",
     lable: "Workflows",
     icon: Layers2Icon,
+  },
+  {
+    href: "flowscrape",
+    lable: "FlowScrape",
+    icon: SearchIcon,
   },
   {
     href: "credentials",

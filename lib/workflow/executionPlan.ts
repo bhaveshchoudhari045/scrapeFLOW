@@ -1,22 +1,14 @@
-import { AppNode, AppNodeMissingInputs } from "@/types/appNode";
+import { AppNode } from "@/types/appNode";
 import {
   WorkflowExecutionPlan,
   WorkflowExecutionPlanPhase,
 } from "@/types/workflow";
-import { Edge } from "@xyflow/react";
+import { Edge, getIncomers } from "@xyflow/react";
 import { TaskRegistry } from "./task/registry";
 
-export enum FlowToExecutionPlanValildationError {
-  "No_Entry_point",
-  "Invalid_Inputs",
-}
-
 type FlowToExecutionPlanType = {
+  error: any;
   executionPlan?: WorkflowExecutionPlan;
-  error?: {
-    type: FlowToExecutionPlanValildationError;
-    invalidElements?: AppNodeMissingInputs[];
-  };
 };
 
 export function FlowToExecutionPlan(
@@ -27,36 +19,19 @@ export function FlowToExecutionPlan(
     (node) => TaskRegistry[node.data.type].isEntryPoint,
   );
   if (!entryPoint) {
-    return {
-      error: {
-        type: FlowToExecutionPlanValildationError.No_Entry_point,
-      },
-    };
+    throw new Error("TODO : HANDLE THIS ERROR");
   }
-
-  const inputsWithErrors: AppNodeMissingInputs[] = [];
-
   const planned = new Set<string>();
-
-  const invalidInputs = getInvalidInputs(entryPoint, edges, planned);
-  if (invalidInputs.length > 0) {
-    inputsWithErrors.push({
-      nodeId: entryPoint.id,
-      inputs: invalidInputs,
-    });
-  }
   const executionPlan: WorkflowExecutionPlan = [
     {
       phase: 1,
       nodes: [entryPoint],
     },
   ];
-
   planned.add(entryPoint.id);
-
   for (
     let phase = 2;
-    phase <= nodes.length && planned.size < nodes.length;
+    phase <= nodes.length || planned.size < nodes.length;
     phase++
   ) {
     const nextPhase: WorkflowExecutionPlanPhase = { phase, nodes: [] };
@@ -73,10 +48,7 @@ export function FlowToExecutionPlan(
           // this means that this particular node has an invalid input
           // which means that the workflow is invalid
           console.error("Invalid inputs", currentNode.id, invalidInputs);
-          inputsWithErrors.push({
-            nodeId: currentNode.id,
-            inputs: invalidInputs,
-          });
+          throw new Error("TODO : HANDLE ERROR 1");
         } else {
           //let's skip this node for now
           continue;
@@ -84,21 +56,16 @@ export function FlowToExecutionPlan(
       }
 
       nextPhase.nodes.push(currentNode);
+      planned.add(currentNode.id);
     }
-    for (const node of nextPhase.nodes) {
-      planned.add(node.id);
+    if (nextPhase.nodes.length > 0) {
+      executionPlan.push(nextPhase);
     }
-    executionPlan.push(nextPhase);
   }
-  if (inputsWithErrors.length > 0) {
-    return {
-      error: {
-        type: FlowToExecutionPlanValildationError.Invalid_Inputs,
-        invalidElements: inputsWithErrors,
-      },
-    };
-  }
-  return { executionPlan };
+  return {
+    executionPlan,
+    error: undefined,
+  };
 }
 function getInvalidInputs(node: AppNode, edges: Edge[], planned: Set<string>) {
   const invalidInputs = [];
@@ -116,37 +83,24 @@ function getInvalidInputs(node: AppNode, edges: Edge[], planned: Set<string>) {
     const inputLinkedToOutput = incomingEdges.find(
       (edge) => edge.targetHandle === input.name,
     );
-
-    const requiredInputProvidedByVisitedOutput =
+    const requierdInputProvidedByVisitedOut =
       input.required &&
       inputLinkedToOutput &&
       planned.has(inputLinkedToOutput.source);
-
-    if (requiredInputProvidedByVisitedOutput) {
-      //the inputs is required and we have a valid value for it
-      //provided by a task that is already planned
+    if (requierdInputProvidedByVisitedOut) {
+      //the inputs is requied and we have a valid value for it
+      // provided by a task that is already planned
       continue;
     } else if (!input.required) {
-      //If the input is not required, but there is an output linked to it
-      // then we need to be sure that the output is already planned
+      //If the input is not requied but there is an output linked to it
+      //then we need to  be sure that the output is already planned
       if (!inputLinkedToOutput) continue;
       if (inputLinkedToOutput && planned.has(inputLinkedToOutput.source)) {
-        //the output is providing a value to the input : the input is fine
+        //The output is providing a value to the input : the input is fine
         continue;
       }
     }
     invalidInputs.push(input.name);
   }
   return invalidInputs;
-}
-
-function getIncomers(node: AppNode, nodes: AppNode[], edges: Edge[]) {
-  if (!node.id) return [];
-  const incomersIds = new Set();
-  edges.forEach((edge) => {
-    if (edge.target === node.id) {
-      incomersIds.add(edge.source);
-    }
-  });
-  return nodes.filter((n) => incomersIds.has(n.id));
 }
