@@ -159,3 +159,12 @@ ADD_PROPERTY_TO_JSON: AddPropertyToJsonTask,
 NAVIGATE_URL: NavigateUrlTask,
 SCROLL_TO_ELEMENT: ScrollToElementTask,
 };
+
+// app/page.tsx
+import LandingPage from "@/components/LandingPage";
+
+export default function Home() {
+return <LandingPage />;
+}
+
+this was app/page.tsx file , but because of creating landing page this is not more needed thats way it is renamed as plain text file

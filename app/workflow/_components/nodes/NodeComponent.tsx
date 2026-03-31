@@ -6,16 +6,19 @@ import NodeHeader from "./NodeHeader";
 import { AppNodeData } from "@/types/appNode";
 import { TaskRegistry } from "@/lib/workflow/task/registry";
 import { NodeOutput, NodeOutputs } from "./NodeOutputs";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "lucide-react";
 
 const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
-
 const NodeComponent = memo((props: NodeProps) => {
   const nodeData = props.data as AppNodeData;
   const task = TaskRegistry[nodeData.type];
   return (
     <NodeCard nodeId={props.id} isSelected={!!props.selected}>
-      {DEV_MODE && <Badge> DEV:{props.id}</Badge>}
+      {DEV_MODE && (
+        <Badge className="text-xs text-red-500">
+          DEV:{props.id} {nodeData.type}
+        </Badge>
+      )}
       <NodeHeader taskType={nodeData.type} nodeId={props.id} />
       <NodeInputs>
         {task.inputs.map((input) => (

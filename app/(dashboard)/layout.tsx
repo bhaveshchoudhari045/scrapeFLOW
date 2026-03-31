@@ -4,8 +4,13 @@ import { ModeToggle } from "@/components/ThemeModeToggle";
 import { Separator } from "@/components/ui/separator";
 import React from "react";
 import { SignedIn, UserButton } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
-function layout({ children }: { children: React.ReactNode }) {
+async function layout({ children }: { children: React.ReactNode }) {
+  const { userId } = auth();
+  if (!userId) redirect("/"); // ← not logged in → go to landing page
+
   return (
     <div className="flex h-screen">
       <DesktopSidebar />
