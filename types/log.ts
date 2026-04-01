@@ -1,5 +1,3 @@
-//import { LogLevel } from "@/lib/generated/prisma/internal/prismaNamespace";
-
 export const LogLevels = ["info", "error"] as const;
 export type LogLevel = (typeof LogLevels)[number];
 

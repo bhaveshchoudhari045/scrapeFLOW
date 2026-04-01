@@ -6,13 +6,15 @@ import React from "react";
 import { SignedIn, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { AmbientCanvas } from "@/components/AmbientCanvas";
 
 async function layout({ children }: { children: React.ReactNode }) {
   const { userId } = auth();
-  if (!userId) redirect("/"); // ← not logged in → go to landing page
+  if (!userId) redirect("/");
 
   return (
     <div className="flex h-screen">
+      <AmbientCanvas />
       <DesktopSidebar />
       <div className="flex flex-col flex-1 min-h-screen">
         <header className="flex items-center justify-between px-6 py-4 h-[50px] container">
