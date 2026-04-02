@@ -16,14 +16,63 @@ type Tab = "overview" | "data" | "insights" | "predictions" | "news";
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 function getSiteConfig(siteType: string) {
+  // Finance
   if (siteType === "finance_deep")
     return { icon: "📈", label: "Deep Stock Analysis", color: "#00f5c8" };
-  if (siteType === "finance_watchlist")
+  if (siteType === "finance_watchlist" || siteType === "finance_stocks")
     return { icon: "📊", label: "Market Watchlist", color: "#00c8d4" };
-  if (siteType === "science")
+  if (siteType === "finance_crypto")
+    return { icon: "₿", label: "Crypto Markets", color: "#f59e0b" };
+  if (siteType === "general_news" && false)
+    // keep below for other checks
+    return { icon: "📰", label: "Market News", color: "#94a3b8" };
+
+  // Science
+  if (siteType === "science_space" || siteType === "science")
     return { icon: "🔭", label: "NASA Intelligence", color: "#a78bfa" };
-  if (siteType === "news")
+
+  // Tech / News
+  if (siteType === "news" || siteType === "social_hn")
     return { icon: "⚡", label: "Tech Intelligence", color: "#f59e0b" };
+  if (siteType === "technology")
+    return { icon: "💻", label: "Technology", color: "#6ee7f7" };
+
+  // Academic
+  if (siteType === "academic_research")
+    return { icon: "🎓", label: "Research Intelligence", color: "#818cf8" };
+
+  // Health
+  if (siteType === "health_medical" || siteType === "health_medicine")
+    return { icon: "🏥", label: "Medical Research", color: "#34d399" };
+
+  // E-commerce
+  if (siteType === "ecommerce_product")
+    return { icon: "🛒", label: "Product Analysis", color: "#fb923c" };
+
+  // News / current events
+  if (siteType === "news_current" || siteType === "general_news")
+    return { icon: "📰", label: "News Analysis", color: "#94a3b8" };
+
+  // Social
+  if (siteType === "social_reddit" || siteType === "reddit_discussion")
+    return { icon: "💬", label: "Community Intel", color: "#ff6b4a" };
+
+  // Sports
+  if (siteType === "sports")
+    return { icon: "🏆", label: "Sports Intel", color: "#facc15" };
+
+  // Entertainment
+  if (siteType === "entertainment")
+    return { icon: "🎬", label: "Entertainment", color: "#e879f9" };
+
+  // Environment
+  if (siteType === "environment" || siteType === "environment_climate")
+    return { icon: "🌿", label: "Climate Intelligence", color: "#4ade80" };
+
+  // Direct URL / unknown
+  if (siteType === "direct_url")
+    return { icon: "🔗", label: "Web Scrape", color: "#64748b" };
+
   return { icon: "◈", label: "Data Intelligence", color: "#00f5c8" };
 }
 
@@ -630,7 +679,9 @@ function DataTab({
   siteType: string;
   enriched?: any;
 }) {
-  /* Finance Deep — grouped by Category */
+  const site = getSiteConfig(siteType);
+
+  /* ── Finance Deep — grouped by Category ── */
   if (siteType === "finance_deep" && records[0]?.Category) {
     const groups: Record<string, any[]> = {};
     for (const r of records) {
@@ -689,8 +740,11 @@ function DataTab({
     );
   }
 
-  /* Finance Watchlist */
-  if (siteType === "finance_watchlist") {
+  /* ── Finance Watchlist ── */
+  if (
+    (siteType === "finance_watchlist" || siteType === "finance_stocks") &&
+    records[0]?.Symbol
+  ) {
     return (
       <div>
         {records.map((r, i) => {
@@ -769,20 +823,23 @@ function DataTab({
     );
   }
 
-  /* Science / NASA */
-  if (siteType === "science") {
-    const apod = records.filter((r) => r["Data Type"]?.includes("APOD"));
-    const asteroids = records.filter((r) =>
-      r["Data Type"]?.includes("Near Earth"),
+  /* ── Science / NASA ── */
+  if (siteType === "science_space" || siteType === "science") {
+    const apod = records.filter(
+      (r) => r.Type?.includes("APOD") || r["Data Type"]?.includes("APOD"),
     );
-    const events = records.filter((r) =>
-      r["Data Type"]?.includes("Earth Event"),
+    const asteroids = records.filter(
+      (r) => r.Type?.includes("NEO") || r["Data Type"]?.includes("Near Earth"),
+    );
+    const events = records.filter(
+      (r) =>
+        r.Type?.includes("Earth Event") ||
+        r["Data Type"]?.includes("Earth Event"),
     );
     const images = enriched?.nasaImages ?? [];
 
     return (
       <div>
-        {/* NASA Images */}
         {images.length > 0 && (
           <GlassCard>
             <SectionTitle>NASA Image Library</SectionTitle>
@@ -831,8 +888,6 @@ function DataTab({
             </div>
           </GlassCard>
         )}
-
-        {/* APOD */}
         {apod.length > 0 && (
           <GlassCard>
             <SectionTitle>Astronomy Picture of the Day</SectionTitle>
@@ -883,13 +938,14 @@ function DataTab({
             ))}
           </GlassCard>
         )}
-
-        {/* Asteroids */}
         {asteroids.length > 0 && (
           <GlassCard>
             <SectionTitle>Near Earth Objects — Today</SectionTitle>
             {asteroids.map((a, i) => {
-              const isHazardous = a["Hazard Status"]?.includes("HAZARDOUS");
+              const isHazardous =
+                (a.Hazardous || a["Hazard Status"] || "").includes(
+                  "HAZARDOUS",
+                ) || (a.Hazardous || a["Hazard Status"] || "").includes("YES");
               return (
                 <div
                   key={i}
@@ -917,22 +973,23 @@ function DataTab({
                     {a.Name}
                   </span>
                   <Badge
-                    text={a["Hazard Status"]}
+                    text={a.Hazardous || a["Hazard Status"] || "Safe"}
                     color={isHazardous ? "#ef4444" : "#00f5c8"}
                   />
                   <Badge
-                    text={`Ø ${a["Diameter Min"]}–${a["Diameter Max"]}`}
+                    text={a.Diameter || a["Diameter Min"] || ""}
                     color="#64748b"
                   />
-                  <Badge text={`Miss: ${a["Miss Distance"]}`} color="#64748b" />
-                  <Badge text={a.Velocity} color="#64748b" />
+                  <Badge
+                    text={`Miss: ${a["Miss Distance"] || ""}`}
+                    color="#64748b"
+                  />
+                  <Badge text={a.Velocity || ""} color="#64748b" />
                 </div>
               );
             })}
           </GlassCard>
         )}
-
-        {/* Earth Events */}
         {events.length > 0 && (
           <GlassCard>
             <SectionTitle>Active Earth Events (EONET)</SectionTitle>
@@ -950,7 +1007,7 @@ function DataTab({
                       : "none",
                 }}
               >
-                <Badge text={e.Category} color="#a78bfa" />
+                <Badge text={e.Category || ""} color="#a78bfa" />
                 <span
                   style={{ fontSize: "0.78rem", color: "#e2e8f0", flex: 1 }}
                 >
@@ -967,8 +1024,239 @@ function DataTab({
     );
   }
 
-  /* HackerNews */
-  if (records[0]?.Title && records[0]?.Score) {
+  /* ── Academic Research ── */
+  if (siteType === "academic_research") {
+    const bySource: Record<string, any[]> = {};
+    for (const r of records) {
+      const src = r.Source || "Other";
+      if (!bySource[src]) bySource[src] = [];
+      bySource[src].push(r);
+    }
+    return (
+      <div>
+        {Object.entries(bySource).map(([src, papers]) => (
+          <GlassCard key={src}>
+            <SectionTitle>{src}</SectionTitle>
+            {papers.map((p, i) => (
+              <div
+                key={i}
+                style={{
+                  paddingBottom: "0.875rem",
+                  marginBottom: "0.875rem",
+                  borderBottom:
+                    i < papers.length - 1
+                      ? "1px solid rgba(255,255,255,0.05)"
+                      : "none",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    color: "#e2e8f0",
+                    marginBottom: "0.25rem",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {p.Title}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    marginBottom: "0.375rem",
+                  }}
+                >
+                  {p.Year && <Badge text={p.Year} color="#64748b" />}
+                  {p.Citations && p.Citations !== "Preprint" && (
+                    <Badge text={`${p.Citations} citations`} color="#a78bfa" />
+                  )}
+                  {p.Venue && (
+                    <Badge text={p.Venue.slice(0, 30)} color="#64748b" />
+                  )}
+                </div>
+                <p
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                    lineHeight: 1.6,
+                    margin: 0,
+                  }}
+                >
+                  {p.Authors?.slice(0, 80)}
+                </p>
+                {p.Abstract && (
+                  <p
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "#475569",
+                      lineHeight: 1.6,
+                      margin: "0.375rem 0 0",
+                    }}
+                  >
+                    {p.Abstract.slice(0, 200)}…
+                  </p>
+                )}
+              </div>
+            ))}
+          </GlassCard>
+        ))}
+      </div>
+    );
+  }
+
+  /* ── Health / Medical ── */
+  if (siteType === "health_medical" || siteType === "health_medicine") {
+    return (
+      <div>
+        {records.map((r, i) => (
+          <div
+            key={i}
+            style={{
+              background: "rgba(255,255,255,0.015)",
+              border: "1px solid rgba(52,211,153,0.1)",
+              borderRadius: "10px",
+              padding: "0.875rem 1rem",
+              marginBottom: "0.5rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                marginBottom: "0.375rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <Badge text={r.Source || "Medical"} color="#34d399" />
+              {r.Date && <Badge text={r.Date} color="#64748b" />}
+            </div>
+            <div
+              style={{
+                fontSize: "0.82rem",
+                color: "#e2e8f0",
+                fontWeight: 500,
+                marginBottom: "0.25rem",
+                lineHeight: 1.4,
+              }}
+            >
+              {r.Title}
+            </div>
+            {r.Authors && (
+              <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                {r.Authors.slice(0, 80)}
+              </div>
+            )}
+            {r.Journal && (
+              <div
+                style={{
+                  fontSize: "0.68rem",
+                  color: "#475569",
+                  marginTop: "0.2rem",
+                }}
+              >
+                {r.Journal}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /* ── E-commerce ── */
+  if (siteType === "ecommerce_product") {
+    return (
+      <div>
+        {records.map((r, i) => (
+          <div
+            key={i}
+            style={{
+              background: "rgba(255,255,255,0.015)",
+              border: "1px solid rgba(251,146,60,0.12)",
+              borderRadius: "10px",
+              padding: "0.875rem 1rem",
+              marginBottom: "0.5rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "1rem",
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: "0.82rem",
+                    color: "#e2e8f0",
+                    fontWeight: 500,
+                    marginBottom: "0.375rem",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {r.Name || r["Product Info"] || `Product ${i + 1}`}
+                </div>
+                {r.Description && (
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#64748b",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {r.Description.slice(0, 120)}
+                  </div>
+                )}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.375rem",
+                    marginTop: "0.375rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {r.Rating && (
+                    <Badge text={`⭐ ${r.Rating}`} color="#f59e0b" />
+                  )}
+                  {r.Reviews && (
+                    <Badge text={`${r.Reviews} reviews`} color="#64748b" />
+                  )}
+                  {r.Discount && <Badge text={r.Discount} color="#00f5c8" />}
+                </div>
+              </div>
+              {r.Price && (
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "1rem",
+                      fontFamily: "monospace",
+                      fontWeight: 700,
+                      color: "#fb923c",
+                    }}
+                  >
+                    {r.Price}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /* ── HackerNews / Tech news ── */
+  if (
+    (siteType === "news" ||
+      siteType === "social_hn" ||
+      siteType === "technology") &&
+    records[0]?.Title &&
+    records[0]?.Score !== undefined
+  ) {
     return (
       <div>
         {records.map((r, i) => (
@@ -1024,12 +1312,40 @@ function DataTab({
                 }}
               >
                 <span style={{ color: "#f59e0b" }}>{r.Score}</span>
-                <span>·</span>
-                <span>{r.Domain}</span>
-                <span>·</span>
-                <span>{r.Author}</span>
-                <span>·</span>
-                <span>{r.Comments} comments</span>
+                {r.Domain && (
+                  <>
+                    <span>·</span>
+                    <span>{r.Domain}</span>
+                  </>
+                )}
+                {r.Author && (
+                  <>
+                    <span>·</span>
+                    <span>{r.Author}</span>
+                  </>
+                )}
+                {r.Comments && (
+                  <>
+                    <span>·</span>
+                    <span>{r.Comments} comments</span>
+                  </>
+                )}
+                {r.Sentiment && (
+                  <>
+                    <span>·</span>
+                    <span
+                      style={{
+                        color: r.Sentiment.includes("Positive")
+                          ? "#00f5c8"
+                          : r.Sentiment.includes("Negative")
+                            ? "#ef4444"
+                            : "#f59e0b",
+                      }}
+                    >
+                      {r.Sentiment}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1038,7 +1354,81 @@ function DataTab({
     );
   }
 
-  /* Generic table fallback */
+  /* ── Reddit / General news — cards with sentiment ── */
+  if (records[0]?.Sentiment || records[0]?.Title) {
+    return (
+      <div>
+        {records.map((r, i) => {
+          const sentColor = (r.Sentiment || "").includes("Positive")
+            ? "#00f5c8"
+            : (r.Sentiment || "").includes("Negative")
+              ? "#ef4444"
+              : "#f59e0b";
+          return (
+            <div
+              key={i}
+              style={{
+                background: "rgba(255,255,255,0.015)",
+                border: `1px solid ${r.Sentiment ? sentColor + "20" : "rgba(255,255,255,0.06)"}`,
+                borderRadius: "10px",
+                padding: "0.875rem 1rem",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  marginBottom: "0.375rem",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                {r.Source && (
+                  <Badge text={r.Source.slice(0, 25)} color="#64748b" />
+                )}
+                {r.Sentiment && <Badge text={r.Sentiment} color={sentColor} />}
+                {r.Date && (
+                  <span style={{ fontSize: "0.62rem", color: "#475569" }}>
+                    {r.Date}
+                  </span>
+                )}
+              </div>
+              <a
+                href={r.URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontSize: "0.82rem",
+                  fontWeight: 500,
+                  color: "#e2e8f0",
+                  textDecoration: "none",
+                  lineHeight: 1.5,
+                  display: "block",
+                }}
+              >
+                {r.Title || r.Content?.slice(0, 120) || "—"}
+              </a>
+              {r.Content && r.Content !== r.Title && (
+                <p
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                    lineHeight: 1.6,
+                    margin: "0.375rem 0 0",
+                  }}
+                >
+                  {r.Content.slice(0, 160)}…
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  /* ── Generic table fallback ── */
   if (!records.length)
     return (
       <div style={{ textAlign: "center", color: "#475569", padding: "2rem" }}>
@@ -1084,9 +1474,16 @@ function DataTab({
               {keys.map((k) => (
                 <td
                   key={k}
-                  style={{ padding: "0.5rem 0.75rem", color: "#94a3b8" }}
+                  style={{
+                    padding: "0.5rem 0.75rem",
+                    color: "#94a3b8",
+                    maxWidth: "200px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
                 >
-                  {String(r[k] ?? "—").slice(0, 60)}
+                  {String(r[k] ?? "—").slice(0, 80)}
                 </td>
               ))}
             </tr>

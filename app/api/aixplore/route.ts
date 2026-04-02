@@ -1,544 +1,483 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
-// ── Build data-specific Claude prompt ─────────────────────────────────────
+const GROQ_API_KEY = process.env.GROQ_API_KEY!;
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "llama-3.1-8b-instant";
+
+// ── Call Groq ──────────────────────────────────────────────────────────────
+async function callGroq(prompt: string, maxTokens = 2000): Promise<string> {
+  const res = await fetch(GROQ_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      max_tokens: maxTokens,
+      temperature: 0.4,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an elite data analyst. You ALWAYS respond with raw valid JSON only. No markdown fences, no backticks, no explanation. Start with { and end with }.",
+        },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content ?? "").trim();
+}
+
+// ── Parse JSON safely ──────────────────────────────────────────────────────
+function parseJSON(raw: string): any | null {
+  const attempts = [
+    () => JSON.parse(raw),
+    () => JSON.parse(raw.replace(/```json\n?|```\n?/g, "").trim()),
+    () => {
+      const m = raw.match(/\{[\s\S]*\}/);
+      return m ? JSON.parse(m[0]) : null;
+    },
+  ];
+  for (const attempt of attempts) {
+    try {
+      const r = attempt();
+      if (r?.summary) return r;
+    } catch {}
+  }
+  return null;
+}
+
+// ── Universal prompt builder ───────────────────────────────────────────────
 function buildPrompt(
-  siteType: string,
+  category: string,
+  subject: string,
   records: any[],
   rawText: string,
   enriched: any,
 ): string {
-  // ── Finance Deep Analysis ──────────────────────────────────────────────
-  if (siteType === "finance_deep" && enriched?.stockDetail) {
-    const s = enriched.stockDetail;
-    const q = s.quote ?? {};
-    const f = s.fundamentals ?? {};
-    const t = s.technicals ?? {};
-    const sen = enriched.sentiment ?? {};
-    const news = (enriched.news ?? [])
-      .slice(0, 8)
-      .map((n: any) => `  - "${n.title}" [${n.sentiment}] — ${n.source}`)
-      .join("\n");
+  const total = records.length;
+  const sample = JSON.stringify(records.slice(0, 10)).slice(0, 3000);
 
-    return `You are a senior equity analyst at a top-tier investment bank (Goldman Sachs level). Analyze this stock data and return ONLY a raw JSON object — no markdown, no backticks, no explanation. Start with { end with }.
+  // Finance deep
+  if (category === "finance_deep") {
+    const s = enriched?.stockDetail;
+    const news = enriched?.news ?? [];
+    const bullish = enriched?.sentiment?.bullish ?? 0;
+    const bearish = enriched?.sentiment?.bearish ?? 0;
+    const context = s
+      ? `
+Company: ${s.fundamentals?.companyName} (${s.symbol})
+Price: ${s.quote?.price} ${s.fundamentals?.currency}, Change: ${s.quote?.changePercent}
+Signal: ${s.technicals?.overallSignal}
+RSI(14): ${s.technicals?.rsi14} — ${s.technicals?.rsiSignal}
+MACD: ${s.technicals?.macd?.trend}
+MA Trend: ${s.technicals?.trend}
+P/E: ${s.fundamentals?.peRatio}, Market Cap: ${s.fundamentals?.marketCap}
+Profit Margin: ${s.fundamentals?.profitMargin}, ROE: ${s.fundamentals?.roe}
+News: ${bullish} positive / ${bearish} negative articles
+Top headlines: ${news
+          .slice(0, 4)
+          .map((n: any) => `"${n.title}" [${n.sentiment}]`)
+          .join("; ")}
+`
+      : sample;
+    return `You are a Goldman Sachs equity analyst. Analyze this stock data and return ONLY raw JSON.
 
-═══ STOCK DATA ═══
-Company: ${f.companyName} (${s.symbol}) | Exchange: ${f.exchange} | Sector: ${f.sector} | Industry: ${f.industry}
-Country: ${f.country} | Employees: ${f.employees} | Currency: ${f.currency}
-
-PRICE ACTION:
-  Current: ${q.price} | Open: ${q.open} | High: ${q.high} | Low: ${q.low} | Prev Close: ${q.previousClose}
-  Change: ${q.change} (${q.changePercent}) | Volume: ${q.volume?.toLocaleString()} | Avg Volume: ${t.avgVolume}
-  Volume Signal: ${t.volumeSignal}
-
-FUNDAMENTALS:
-  Market Cap: ${f.marketCap} | P/E: ${f.peRatio} | PEG: ${f.pegRatio} | P/B: ${f.pbRatio}
-  EPS: ${f.eps} | ROE: ${f.roe} | ROA: ${f.roa} | Debt/Equity: ${f.debtToEquity}
-  Profit Margin: ${f.profitMargin} | Revenue Growth YOY: ${f.revenueGrowth}
-  Free Cash Flow: ${f.freeCashFlow} | Dividend Yield: ${f.dividendYield}
-  52W High: ${f.week52High} | 52W Low: ${f.week52Low} | Analyst Target: ${f.analystTarget} | Beta: ${f.beta}
-
-TECHNICALS:
-  Overall Signal: ${t.overallSignal}
-  RSI (14): ${t.rsi14} → ${t.rsiSignal}
-  MACD: ${t.macd?.macd} | Signal: ${t.macd?.signal} | Histogram: ${t.macd?.histogram} → ${t.macd?.trend}
-  MA 20: ${t.ma20} | MA 50: ${t.ma50} | MA 200: ${t.ma200}
-  Price vs MA50: ${t.priceVsMa50} | Price vs MA200: ${t.priceVsMa200}
-  Trend: ${t.trend} | ATR: ${t.atr} | 10d Momentum: ${t.momentum}%
-  Bollinger Upper: ${t.bollinger?.upper} | Middle: ${t.bollinger?.middle} | Lower: ${t.bollinger?.lower} | Bandwidth: ${t.bollinger?.bandwidth}%
-
-NEWS SENTIMENT (${enriched.news?.length ?? 0} articles analyzed):
-  Overall: ${sen.overall} | Bullish: ${sen.bullish} | Bearish: ${sen.bearish} | Neutral: ${sen.neutral}
-  Latest headlines:
-${news}
-
-COMPANY DESCRIPTION: ${f.description?.slice(0, 300)}
+${context}
 
 Return this exact JSON structure:
 {
-  "summary": "4-5 sentences of institutional-grade analysis. Reference specific numbers: price, RSI value, MACD signal, news sentiment ratio, P/E vs sector, revenue growth. Give a nuanced view of what these signals collectively mean for the stock right now.",
+  "summary": "4-5 sentences of specific institutional analysis. Reference the actual company name, current price, P/E, signal, and news sentiment ratio. Be specific.",
   "prediction": {
-    "result": "Strong Buy | Buy | Hold | Sell | Strong Sell",
+    "result": "Strong Buy OR Buy OR Hold OR Sell OR Strong Sell",
     "confidence": "XX%",
-    "reason": "3 sentences explaining the verdict using specific technical and fundamental data points from above. Reference RSI, MACD, MA cross, and news sentiment together."
+    "reason": "2-3 sentences referencing specific RSI value, MACD signal, and news sentiment ratio."
   },
   "insights": [
-    { "insight": "Specific technical insight referencing actual RSI/MACD/Bollinger values and what they indicate", "significance": "high", "category": "Technical" },
-    { "insight": "Specific fundamental insight referencing actual P/E, revenue growth, or profit margin values", "significance": "high", "category": "Fundamental" },
-    { "insight": "News sentiment insight: what the ${sen.bullish} bullish vs ${sen.bearish} bearish articles suggest about market narrative", "significance": "medium", "category": "Sentiment" },
-    { "insight": "Risk assessment: Beta, ATR, debt/equity implications for position sizing", "significance": "medium", "category": "Risk" },
-    { "insight": "Valuation insight: is current P/E of ${f.peRatio} cheap or expensive given ${f.revenueGrowth} revenue growth?", "significance": "medium", "category": "Valuation" }
+    { "insight": "Valuation insight referencing actual P/E vs typical sector range", "significance": "high", "category": "Valuation" },
+    { "insight": "Technical insight referencing RSI and MACD specific values", "significance": "high", "category": "Technical" },
+    { "insight": "News sentiment insight: ${bullish} positive vs ${bearish} negative articles — what narrative is forming?", "significance": "medium", "category": "Sentiment" },
+    { "insight": "Risk assessment using Beta and 52-week range data", "significance": "medium", "category": "Risk" },
+    { "insight": "One actionable trading insight for this stock right now", "significance": "medium", "category": "Action" }
   ],
   "scenarios": {
-    "bull": "Bull case in 2-3 sentences: what conditions would push this stock to the analyst target of ${f.analystTarget}? Reference specific catalysts.",
-    "base": "Base case in 2 sentences: most likely 30-day path given current RSI ${t.rsi14} and MACD histogram ${t.macd?.histogram}.",
-    "bear": "Bear case in 2 sentences: what could cause a breakdown below MA200 of ${t.ma200}?"
+    "bull": "Specific bull case for this stock in 30 days",
+    "base": "Most probable near-term trajectory",
+    "bear": "Specific downside risk scenario"
   },
-  "bestUseCase": "2 sentences on the optimal trading/investment strategy for this stock given current signals. Be specific about timeframe and entry conditions."
+  "bestUseCase": "Optimal strategy for this stock given all current signals."
 }`;
   }
 
-  // ── Finance Watchlist ──────────────────────────────────────────────────
-  if (siteType === "finance_watchlist" && enriched?.watchlist) {
-    const stocks = enriched.watchlist;
-    const upCount = stocks.filter((s: any) => s.direction === "▲").length;
-    const downCount = stocks.length - upCount;
-    const stockList = stocks
+  // Science / NASA
+  if (category === "science_space") {
+    const hazardous = (enriched?.asteroids ?? []).filter(
+      (a: any) => a.is_potentially_hazardous_asteroid,
+    ).length;
+    const apodTitles = (enriched?.articles ?? [])
+      .map((a: any) => a.title)
+      .join(", ");
+    const events = (enriched?.events ?? [])
+      .map((e: any) => `${e.categories?.[0]?.title}: ${e.title}`)
+      .join("; ");
+    return `You are NASA's chief science communicator. Analyze this space data and return ONLY raw JSON.
+
+APOD articles: ${apodTitles || "None"}
+Near-Earth Objects today: ${(enriched?.asteroids ?? []).length} total, ${hazardous} potentially hazardous
+Active Earth Events: ${events || "None"}
+
+Return this exact JSON:
+{
+  "summary": "4-5 sentences covering today's astronomical highlights, the ${hazardous} hazardous NEO status, active Earth events, and what this reveals about current NASA mission priorities. Reference specific article titles.",
+  "prediction": {
+    "result": "${hazardous > 0 ? "Planetary Alert" : "Normal Monitoring"}",
+    "confidence": "${hazardous > 0 ? "88" : "92"}%",
+    "reason": "2-3 sentences on NEO safety (miss distances), Earth event severity, and overall space activity level today."
+  },
+  "insights": [
+    { "insight": "Planetary defense assessment: are today's ${hazardous} hazardous NEOs concerning or routine?", "significance": "${hazardous > 0 ? "high" : "medium"}", "category": "Planetary Defense" },
+    { "insight": "Specific insight from the APOD content — what astronomical phenomenon or mission does it highlight?", "significance": "high", "category": "Astronomy" },
+    { "insight": "Earth systems: what do the active EONET events reveal about current planetary dynamics?", "significance": "medium", "category": "Earth Science" },
+    { "insight": "How does today's data connect to NASA's current flagship missions (Artemis, Webb, Perseverance)?", "significance": "medium", "category": "Missions" }
+  ],
+  "scenarios": {
+    "bull": "Best-case discovery or mission milestone based on current data",
+    "base": "Standard monitoring continuation for current missions",
+    "bear": "Risk scenario if any orbital uncertainties resolve unfavorably"
+  },
+  "bestUseCase": "Most actionable use of this NASA data for educators, journalists, or planetary defense researchers."
+}`;
+  }
+
+  // HackerNews / Tech news
+  if (
+    category === "news" ||
+    category === "technology" ||
+    category === "social_hn"
+  ) {
+    const stories = enriched?.stories ?? records;
+    const top5 = stories
+      .slice(0, 5)
       .map(
         (s: any) =>
-          `  ${s.flag} ${s.name} (${s.symbol}): ${s.price} | ${s.direction}${s.changePercent}% | Vol: ${s.volume}`,
+          `"${s.title || s.Title}" (${s.score || s.Score || 0} pts, ${s.domain || s.Domain || ""})`,
       )
-      .join("\n");
+      .join("; ");
+    const positive = records.filter((r: any) =>
+      r.Sentiment?.includes("Positive"),
+    ).length;
+    const negative = records.filter((r: any) =>
+      r.Sentiment?.includes("Negative"),
+    ).length;
+    return `You are a senior technology analyst. Analyze these ${total} tech stories/articles and return ONLY raw JSON.
 
-    return `You are a senior market strategist. Analyze this multi-asset watchlist and return ONLY raw JSON. Start with { end with }.
-
-═══ WATCHLIST DATA ═══
-${stockList}
-
-Market breadth: ${upCount} advancing / ${downCount} declining out of ${stocks.length} tracked assets.
-Asset classes: Indian equities (BSE), US equities (NASDAQ/NYSE), Commodity ETFs (Gold, Oil)
+Top stories: ${top5}
+Sentiment: ${positive} positive / ${negative} negative
+Subject: ${subject}
 
 Return this exact JSON:
 {
-  "summary": "3-4 sentences analyzing the market breadth, which segments (India/US/Commodities) are leading, and what the mixed/aligned performance signals for macro direction. Reference actual symbols and percentage moves.",
+  "summary": "4-5 sentences about what these ${total} stories reveal about current tech community priorities. Reference specific story titles and point scores. Identify the dominant theme.",
   "prediction": {
-    "result": "Risk-On | Risk-Off | Cautious Bullish | Cautious Bearish | Mixed",
+    "result": "Optimistic OR Critical OR Mixed OR Neutral OR Trending",
     "confidence": "XX%",
-    "reason": "2-3 sentences: reference the ${upCount}/${stocks.length} advance/decline ratio and specific movers by name. What is the market telling us?"
+    "reason": "2-3 sentences on community sentiment based on point scores and story topics."
   },
   "insights": [
-    { "insight": "Which specific asset in the list is the most significant mover and why does it matter", "significance": "high", "category": "Market Leader" },
-    { "insight": "India vs US divergence or correlation — what does the BSE/NYSE comparison signal", "significance": "high", "category": "Global Macro" },
-    { "insight": "Commodity signal — what Gold and Oil ETF movement tells us about inflation/risk appetite", "significance": "medium", "category": "Commodities" },
-    { "insight": "Rotation signal — which sectors/geographies are attracting or losing capital today", "significance": "medium", "category": "Capital Flow" }
+    { "insight": "Dominant theme: what topic appears most across the top stories and why is it resonating now?", "significance": "high", "category": "Trend" },
+    { "insight": "Point score distribution: what does the engagement gap between top and bottom stories reveal?", "significance": "high", "category": "Engagement" },
+    { "insight": "Emerging signal: what topic has fewer stories but is rapidly gaining community attention?", "significance": "medium", "category": "Emerging" },
+    { "insight": "Domain analysis: which sources/domains appear most and what does this say about content authority?", "significance": "medium", "category": "Sources" },
+    { "insight": "Practical implication: what should a developer or tech founder act on from today's top stories?", "significance": "medium", "category": "Action" }
   ],
   "scenarios": {
-    "bull": "If positive momentum continues, which 2-3 assets in the watchlist benefit most?",
-    "base": "Most likely near-term trajectory for the watchlist as a whole.",
-    "bear": "What macro event could reverse today's trend — and which assets would fall hardest?"
+    "bull": "If top trending topics reach mainstream: what happens in 6 months?",
+    "base": "Most probable near-term development for the top story",
+    "bear": "What concerns or risks are buried in the lower-scoring stories?"
   },
-  "bestUseCase": "Specific actionable strategy: which assets to watch for entry, which to avoid, and what signal to wait for."
+  "bestUseCase": "Most actionable insight for a developer, startup founder, or tech investor from today's HN data."
 }`;
   }
 
-  // ── NASA / Science ─────────────────────────────────────────────────────
-  if (siteType === "science" && enriched) {
-    const { articles, asteroids, events, nasaImages } = enriched;
-    const hazardous = (asteroids ?? []).filter((a: any) =>
-      a.hazardous?.includes("HAZARDOUS"),
+  // Academic research
+  if (category === "academic_research") {
+    const papers = records.filter(
+      (r: any) =>
+        r.Source?.includes("Scholar") ||
+        r.Source?.includes("arXiv") ||
+        r.Source?.includes("PubMed"),
     );
-    const apodTitles = (articles ?? [])
-      .map((a: any) => `"${a.title}" (${a.date})`)
-      .join(", ");
-    const neoList = (asteroids ?? [])
-      .slice(0, 5)
-      .map(
-        (a: any) =>
-          `  ${a.name}: ${a.hazardous} | Diameter: ${a.diameter_min_km}–${a.diameter_max_km} km | Miss: ${a.miss_distance_km} km | Speed: ${a.velocity_kmh}`,
+    const topCited = [...papers]
+      .sort(
+        (a: any, b: any) =>
+          (parseInt(b.Citations) || 0) - (parseInt(a.Citations) || 0),
       )
-      .join("\n");
-    const eventList = (events ?? [])
-      .slice(0, 5)
-      .map((e: any) => `  ${e.category}: ${e.title} (${e.date})`)
-      .join("\n");
+      .slice(0, 3);
+    return `You are a senior research analyst. Analyze these ${total} academic records about "${subject}" and return ONLY raw JSON.
 
-    return `You are a NASA space science communicator and planetary defense analyst. Analyze this data and return ONLY raw JSON. Start with { end with }.
-
-═══ NASA DATA ═══
-APOD Articles today: ${apodTitles}
-
-Near-Earth Objects (${asteroids?.length ?? 0} tracked today):
-${neoList}
-Potentially Hazardous: ${hazardous.length} objects
-
-Active Earth Events (EONET):
-${eventList}
+Top cited papers: ${topCited.map((p: any) => `"${p.Title}" (${p.Citations} citations, ${p.Year})`).join("; ")}
+Sources: ${[...new Set(records.map((r: any) => r.Source))].join(", ")}
+Data sample: ${sample}
 
 Return this exact JSON:
 {
-  "summary": "4-5 sentences of science-grade analysis. Discuss the astronomical significance of today's APOD topics, assess the planetary defense situation (${hazardous.length} hazardous NEOs), and connect the Earth events to broader environmental patterns. Be scientifically precise.",
+  "summary": "4-5 sentences synthesizing the research landscape for '${subject}'. Reference specific paper titles, citation counts, and year range. Identify consensus vs controversy.",
   "prediction": {
-    "result": "${hazardous.length > 0 ? "Planetary Alert" : "Normal Monitoring"} | Discovery | Research Breakthrough | Mission Update",
+    "result": "Emerging Field OR Established Field OR Breakthrough Imminent OR Rapidly Advancing OR Contested Area",
     "confidence": "XX%",
-    "reason": "2-3 sentences: if hazardous NEOs exist, discuss their actual miss distance and velocity. If not, discuss what the APOD content reveals about current NASA research priorities."
+    "reason": "2-3 sentences on field trajectory based on citation patterns and publication years."
   },
   "insights": [
-    { "insight": "Planetary defense assessment: specific analysis of the closest/largest NEO — actual size, speed, and miss distance context (is ${(asteroids?.[0]?.miss_distance_km ?? "").slice(0, 10)} km close in astronomical terms?)", "significance": "high", "category": "Planetary Defense" },
-    { "insight": "Astronomical insight from APOD content — what scientific phenomenon or mission does today's imagery highlight?", "significance": "high", "category": "Astronomy" },
-    { "insight": "Earth systems insight: what do the active EONET events (${events?.length ?? 0} open events) reveal about current Earth system dynamics?", "significance": "medium", "category": "Earth Science" },
-    { "insight": "Context: how does today's NASA data compare to historical norms? Is activity high, low, or typical?", "significance": "medium", "category": "Context" }
+    { "insight": "Citation concentration: what does the gap between top-cited and average papers reveal about consensus in this field?", "significance": "high", "category": "Research Depth" },
+    { "insight": "Temporal evolution: how has the research direction changed from the oldest to newest papers in this set?", "significance": "high", "category": "Evolution" },
+    { "insight": "Source diversity: what does having data from ${[...new Set(records.map((r: any) => r.Source))].length} sources reveal about field breadth?", "significance": "medium", "category": "Coverage" },
+    { "insight": "Application gap: where is the distance between current research and real-world deployment?", "significance": "medium", "category": "Impact" },
+    { "insight": "Next frontier: based on publication trajectory, what will be the next major research focus?", "significance": "medium", "category": "Forecast" }
   ],
   "scenarios": {
-    "bull": "Best-case scientific outcome: what breakthrough or discovery do current NASA missions point toward?",
-    "base": "Standard monitoring scenario: what should scientists and the public expect in the next 30 days?",
-    "bear": "Risk scenario: if any hazardous NEOs have orbital uncertainty, what are the implications?"
+    "bull": "Optimistic scenario if current research trends continue for 2-3 years",
+    "base": "Most probable near-term development based on citation volume",
+    "bear": "Obstacles that could slow progress in this field"
   },
-  "bestUseCase": "Who benefits most from this data (educators, journalists, researchers, policy makers) and how should they use it specifically?"
+  "bestUseCase": "Who benefits most from this research compilation and what is the single most actionable insight?"
 }`;
   }
 
-  // ── HackerNews ─────────────────────────────────────────────────────────
-  if (siteType === "news" && enriched?.stories) {
-    const stories = enriched.stories.slice(0, 15);
-    const topStories = stories
-      .map(
-        (s: any, i: number) =>
-          `  ${i + 1}. [${s.score}pts, ${s.comments} comments] "${s.title}" — ${s.domain}`,
-      )
-      .join("\n");
-    const domains = Array.from(new Set(stories.map((s: any) => s.domain)))
-      .slice(0, 8)
-      .join(", ");
+  // Health / Medical
+  if (category === "health_medical") {
+    return `You are a medical research analyst. Analyze these ${total} health/medical records about "${subject}" and return ONLY raw JSON.
 
-    const avgScore = Math.round(
-      stories.reduce((a: number, s: any) => a + s.score, 0) / stories.length,
-    );
-
-    return `You are a senior tech industry analyst and venture capital researcher. Analyze these Hacker News top stories and return ONLY raw JSON. Start with { end with }.
-
-═══ HACKER NEWS DATA ═══
-Top stories right now (sorted by community score):
-${topStories}
-
-Meta: ${stories.length} stories | Avg score: ${avgScore}pts | Source domains: ${domains}
+Data: ${sample}
 
 Return this exact JSON:
 {
-  "summary": "4-5 sentences identifying the dominant themes across these stories (AI, infrastructure, security, business, etc). Reference specific story titles and their point scores. Explain what the developer community's attention distribution reveals about current industry priorities.",
+  "summary": "4-5 sentences synthesizing the medical findings for '${subject}'. Reference specific studies, clinical evidence strength, and practical implications.",
   "prediction": {
-    "result": "Bullish on AI | Infrastructure Surge | Security Focus | Business Critical | Mixed Signals",
+    "result": "Strong Evidence OR Emerging Evidence OR Preliminary Only OR Contested OR Well-Established",
     "confidence": "XX%",
-    "reason": "2-3 sentences: what do the highest-scoring stories (by name) tell us about where developer mindshare and potentially VC dollars are flowing in the next 6 months?"
+    "reason": "2-3 sentences on evidence quality and clinical applicability."
   },
   "insights": [
-    { "insight": "Dominant theme analysis: which technology category captures the most attention and what does the score distribution reveal about consensus vs controversy?", "significance": "high", "category": "Trend" },
-    { "insight": "High engagement outlier: identify the story with the highest comment-to-score ratio — controversy vs genuine interest analysis", "significance": "high", "category": "Community" },
-    { "insight": "Domain diversity insight: what does the presence/absence of domains like ${domains.split(",")[0]} reveal about information sourcing?", "significance": "medium", "category": "Media" },
-    { "insight": "Emerging signal: identify a lower-scoring story that may represent an early trend before mainstream adoption", "significance": "medium", "category": "Early Signal" },
-    { "insight": "Business implication: which stories have the most direct monetization or enterprise impact?", "significance": "medium", "category": "Business" }
+    { "insight": "Evidence quality: what level of clinical evidence exists — RCTs, observational, or preliminary?", "significance": "high", "category": "Evidence" },
+    { "insight": "Consensus vs debate: where do researchers agree and disagree on '${subject}'?", "significance": "high", "category": "Consensus" },
+    { "insight": "Practical implication: what does this research mean for a patient or clinician today?", "significance": "medium", "category": "Clinical" },
+    { "insight": "Safety considerations: what risks or contraindications appear in the data?", "significance": "medium", "category": "Safety" },
+    { "insight": "Research gap: what critical question about '${subject}' remains unanswered?", "significance": "medium", "category": "Gap" }
   ],
   "scenarios": {
-    "bull": "If the dominant themes (AI/infrastructure/etc) continue trending, what products or companies will benefit in 6-12 months?",
-    "base": "Most likely near-term developer ecosystem evolution based on today's story composition.",
-    "bear": "Which stories signal potential risks, regulatory friction, or technology headwinds?"
+    "bull": "Best-case health outcome if evidence continues strengthening",
+    "base": "Current clinical recommendation based on available evidence",
+    "bear": "Worst-case if further research reveals complications"
   },
-  "bestUseCase": "Specific use cases: for a tech startup founder, a VC, and a developer — what is the single most actionable insight from today's HN frontpage?"
+  "bestUseCase": "How should a patient, clinician, or researcher use this information responsibly?"
 }`;
   }
-  // ── ADD THIS BLOCK inside buildPrompt() in your aixplore/route.ts ──
-  // Add BEFORE the "Generic fallback" comment at the bottom
 
-  // ── Ecommerce / Universal ─────────────────────────────────────────────────
-  if (siteType === "ecommerce" || siteType === "general") {
-    const category = enriched?.category ?? "products";
-    const displayType = enriched?.displayType ?? "table";
-    const itemCount = records.length;
-    const sampleItems = records
-      .slice(0, 8)
-      .map((r: any, i: number) => {
-        const entries = Object.entries(r)
-          .slice(0, 6)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(" | ");
-        return `  ${i + 1}. ${entries}`;
-      })
-      .join("\n");
-
-    // Find price range if products
-    const prices: number[] = [];
-    records.forEach((r: any) => {
-      const priceStr = r.price || r.Price || r.cost || "";
-      const num = parseFloat(String(priceStr).replace(/[^0-9.]/g, ""));
-      if (num > 0) prices.push(num);
-    });
-    const minPrice = prices.length ? Math.min(...prices) : 0;
-    const maxPrice = prices.length ? Math.max(...prices) : 0;
-    const avgPrice = prices.length
+  // E-commerce
+  if (category === "ecommerce_product") {
+    const products = records.filter((r: any) => r.Price || r.Name);
+    const prices = products
+      .map((p: any) =>
+        parseFloat(String(p.Price || "").replace(/[^0-9.]/g, "")),
+      )
+      .filter((n) => n > 0);
+    const minP = prices.length ? Math.min(...prices) : 0;
+    const maxP = prices.length ? Math.max(...prices) : 0;
+    const avgP = prices.length
       ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
       : 0;
+    return `You are a smart shopping analyst. Analyze these ${products.length} products for "${subject}" and return ONLY raw JSON.
 
-    return `You are a smart shopping and data analyst. The user searched for: "${rawText.slice(0, 100) || category}"
-Page scraped: ${enriched?.pageTitle || "product listing"}
-Category: ${category} | Items found: ${itemCount}
-${prices.length ? `Price range: ₹${minPrice.toLocaleString()} – ₹${maxPrice.toLocaleString()} | Avg: ₹${avgPrice.toLocaleString()}` : ""}
+Price range: ₹${minP.toLocaleString()}–₹${maxP.toLocaleString()}, Average: ₹${avgP.toLocaleString()}
+Data: ${sample}
 
-Sample items:
-${sampleItems}
-
-Return ONLY raw JSON (no markdown, no backticks). Start with { end with }:
+Return this exact JSON:
 {
-  "summary": "4-5 sentences analyzing the ${category} listings. Mention the price range, variety available, which items seem to offer best value, and what the overall market positioning looks like for this category.",
+  "summary": "4-5 sentences analyzing the ${subject} market. Cover price distribution, brand variety, and standout options at different budget points. Reference specific product names and prices.",
   "prediction": {
-    "result": "Best Value Pick | Premium Market | Budget Friendly | Mixed Range | Competitive Market",
+    "result": "Best Value Available OR Premium Market OR Budget Friendly OR Competitive Pricing OR Limited Options",
     "confidence": "XX%",
-    "reason": "2-3 sentences: reference specific price points and products from the list. Which item stands out as best value and why?"
+    "reason": "2-3 sentences: which specific product stands out and why, referencing actual price."
   },
   "insights": [
-    { "insight": "Price analysis: reference actual min/max prices (₹${minPrice}–₹${maxPrice}) and what drives the price difference in this category", "significance": "high", "category": "Pricing" },
-    { "insight": "Best value pick: identify the specific product that offers the best price-to-spec ratio from the list", "significance": "high", "category": "Recommendation" },
-    { "insight": "Brand/market insight: which brands dominate this listing and what does that reveal about the market", "significance": "medium", "category": "Market" },
-    { "insight": "What features or specs most significantly drive the price difference in this category", "significance": "medium", "category": "Specs" },
-    { "insight": "Buying advice: what should the buyer watch out for or prioritize when choosing from these options", "significance": "medium", "category": "Advice" }
+    { "insight": "Price spread: what drives the ₹${minP.toLocaleString()}–₹${maxP.toLocaleString()} range in this category?", "significance": "high", "category": "Pricing" },
+    { "insight": "Best value pick: identify the single specific product with the best price-to-spec ratio", "significance": "high", "category": "Recommendation" },
+    { "insight": "Brand distribution: which brands dominate and what does this reveal about market trust?", "significance": "medium", "category": "Market" },
+    { "insight": "Spec-price correlation: which specifications most strongly justify price premiums here?", "significance": "medium", "category": "Specs" },
+    { "insight": "Buyer warning: what red flags or hidden costs should this buyer watch for?", "significance": "medium", "category": "Caution" }
   ],
   "scenarios": {
-    "bull": "If budget is flexible (above ₹${maxPrice > 0 ? Math.round(maxPrice * 0.7) : 50000}), which product and why?",
-    "base": "Best balanced choice around the average price point of ₹${avgPrice > 0 ? avgPrice : 30000}?",
-    "bear": "What is the best budget pick under ₹${minPrice > 0 ? Math.round(minPrice * 1.3) : 20000} from this list?"
+    "bull": "Best premium pick if budget is above ₹${maxP > 0 ? Math.round(maxP * 0.7).toLocaleString() : "50,000"}",
+    "base": "Best balanced pick around ₹${avgP.toLocaleString()}",
+    "bear": "Best budget pick under ₹${minP > 0 ? Math.round(minP * 1.5).toLocaleString() : "20,000"}"
   },
-  "bestUseCase": "Who should buy from this listing (student/professional/gamer/etc) and what is the specific top recommendation with justification?"
+  "bestUseCase": "Specific top recommendation with justification for the buyer searching for '${subject}'."
 }`;
   }
-  // Generic fallback
-  return `Analyze this data and return ONLY raw JSON (no markdown). Start with { end with }.
-Data: ${JSON.stringify(records.slice(0, 10))}
+
+  // General news / current events / sports / entertainment / everything else
+  const positive = records.filter((r: any) =>
+    r.Sentiment?.includes("Positive"),
+  ).length;
+  const negative = records.filter((r: any) =>
+    r.Sentiment?.includes("Negative"),
+  ).length;
+  const sources = [
+    ...new Set(
+      records.map((r: any) => r.Source || r.source || "").filter(Boolean),
+    ),
+  ]
+    .slice(0, 4)
+    .join(", ");
+  const topTitles = records
+    .slice(0, 5)
+    .map((r: any) => r.Title || r.title || r.Content || "")
+    .filter(Boolean)
+    .join("; ");
+
+  return `You are a world-class research analyst. Analyze these ${total} records about "${subject}" and return ONLY raw JSON.
+
+Sources: ${sources || "Multiple"}
+Sentiment: ${positive} positive / ${negative} negative
+Top items: ${topTitles}
+Data: ${sample}
+
+Return this exact JSON:
 {
-  "summary": "Specific 3-4 sentence analysis of the actual data values",
-  "prediction": { "result": "verdict", "confidence": "70%", "reason": "specific reason" },
+  "summary": "4-5 sentences synthesizing everything found about '${subject}' across ${total} records. Reference specific titles, names, or data points. Give a nuanced picture connecting dots across sources.",
+  "prediction": {
+    "result": "choose the single most appropriate verdict for '${subject}'",
+    "confidence": "XX%",
+    "reason": "2-3 sentences of specific evidence from the actual data above."
+  },
   "insights": [
-    { "insight": "specific insight 1", "significance": "high" },
-    { "insight": "specific insight 2", "significance": "medium" },
-    { "insight": "specific insight 3", "significance": "medium" }
+    { "insight": "Most important cross-source pattern found in this data about '${subject}'", "significance": "high", "category": "Key Finding" },
+    { "insight": "Most surprising or counter-intuitive finding from the data", "significance": "high", "category": "Discovery" },
+    { "insight": "Sentiment analysis: what does ${positive} positive vs ${negative} negative records reveal?", "significance": "medium", "category": "Sentiment" },
+    { "insight": "Knowledge gap: what important aspect of '${subject}' was not covered by any source?", "significance": "medium", "category": "Gap" },
+    { "insight": "Single most actionable takeaway from all ${total} records", "significance": "medium", "category": "Action" }
   ],
-  "bestUseCase": "specific use case"
+  "scenarios": {
+    "bull": "Best-case scenario if the most positive signals in this data prove accurate",
+    "base": "Most probable near-term development based on the weight of evidence",
+    "bear": "Worst-case if the concerns raised in negative records materialize"
+  },
+  "bestUseCase": "Who benefits most from this data and what is the single most actionable insight?"
 }`;
 }
 
-// ── Fallback if Claude fails ───────────────────────────────────────────────
-function buildFallback(siteType: string, records: any[], enriched: any) {
-  if (siteType === "finance_deep" && enriched?.stockDetail) {
-    const s = enriched.stockDetail;
-    const signalWord = s.technicals?.overallSignal?.includes("Buy")
-      ? "Bullish"
-      : s.technicals?.overallSignal?.includes("Sell")
-        ? "Bearish"
-        : "Neutral";
-    return {
-      summary: `${s.fundamentals?.companyName} (${s.symbol}) is trading at ${s.quote?.price} ${s.fundamentals?.currency}, ${s.quote?.changePercent} today. The technical composite signal reads ${s.technicals?.overallSignal}. RSI at ${s.technicals?.rsi14} indicates ${s.technicals?.rsiSignal}, while the MACD shows ${s.technicals?.macd?.trend}. The ${s.technicals?.trend} confirms the medium-term directional bias.`,
-      prediction: {
-        result: signalWord,
-        confidence: "68%",
-        reason: `RSI at ${s.technicals?.rsi14} and MACD histogram of ${s.technicals?.macd?.histogram} form the primary basis for this verdict. ${s.technicals?.priceVsMa50} and ${s.technicals?.priceVsMa200} support the ${signalWord.toLowerCase()} case.`,
-      },
-      insights: [
-        {
-          insight: `P/E of ${s.fundamentals?.peRatio} with ${s.fundamentals?.revenueGrowth} revenue growth gives a valuation baseline for relative comparison`,
-          significance: "high",
-          category: "Valuation",
-        },
-        {
-          insight: `ATR of ${s.technicals?.atr} defines typical daily volatility — use for position sizing and stop-loss placement`,
-          significance: "medium",
-          category: "Risk",
-        },
-        {
-          insight: `News sentiment: ${enriched.sentiment?.bullish ?? 0} bullish vs ${enriched.sentiment?.bearish ?? 0} bearish articles — market narrative leans ${enriched.sentiment?.overall ?? "mixed"}`,
-          significance: "medium",
-          category: "Sentiment",
-        },
-      ],
-      scenarios: {
-        bull: `Price reaches analyst target of ${s.fundamentals?.analystTarget} if revenue growth accelerates and RSI breaks above 70.`,
-        base: `Consolidation near current levels with MA50 at ${s.technicals?.ma50} acting as support.`,
-        bear: `Breakdown below MA200 at ${s.technicals?.ma200} if broader market deteriorates.`,
-      },
-      bestUseCase: `Use for swing trading decisions on ${s.fundamentals?.companyName}. Wait for RSI confirmation above/below 50 before entering.`,
-    };
-  }
-
-  if (siteType === "finance_watchlist" && enriched?.watchlist) {
-    const up = enriched.watchlist.filter(
-      (s: any) => s.direction === "▲",
-    ).length;
-    const total = enriched.watchlist.length;
-    return {
-      summary: `Watchlist of ${total} assets shows ${up} advancing and ${total - up} declining. Market breadth of ${Math.round((up / total) * 100)}% positive suggests ${up > total / 2 ? "mild risk-on" : "risk-off"} conditions across Indian and US equities.`,
-      prediction: {
-        result: up > total / 2 ? "Cautious Bullish" : "Mixed",
-        confidence: "62%",
-        reason: `${up}/${total} positive breadth with mixed India/US signals. No clear directional conviction.`,
-      },
-      insights: [
-        {
-          insight: `${up}/${total} stocks advancing — breadth ${up > total / 2 ? "supports" : "does not support"} a broad rally`,
-          significance: "high",
-          category: "Breadth",
-        },
-        {
-          insight:
-            "Indian large-caps and US tech divergence reveals different macro trajectories",
-          significance: "medium",
-          category: "Global Macro",
-        },
-        {
-          insight:
-            "Commodity ETFs (Gold/Oil) provide hedging signal for the portfolio",
-          significance: "medium",
-          category: "Commodities",
-        },
-      ],
-      scenarios: {
-        bull: "All sectors align positive if US inflation data surprises to the downside.",
-        base: "Continued mixed signals with sector rotation.",
-        bear: "Risk-off if macro data disappoints — commodities would outperform equities.",
-      },
-      bestUseCase:
-        "Use to identify which segment (Indian large-cap, US tech, commodities) is leading today and rotate into strength.",
-    };
-  }
-
-  if (siteType === "science" && enriched) {
-    const hazardous = (enriched.asteroids ?? []).filter((a: any) =>
-      a.hazardous?.includes("HAZARDOUS"),
-    ).length;
-    return {
-      summary: `NASA data today includes ${enriched.articles?.length ?? 0} APOD articles, ${enriched.asteroids?.length ?? 0} near-Earth objects (${hazardous} flagged hazardous), and ${enriched.events?.length ?? 0} active Earth events tracked by EONET. ${hazardous > 0 ? `${hazardous} potentially hazardous asteroid(s) are being monitored in today's close approach window.` : "No hazardous asteroids in today's close approach window."}`,
-      prediction: {
-        result: hazardous > 0 ? "Planetary Alert" : "Normal Monitoring",
-        confidence: "85%",
-        reason: `${hazardous > 0 ? `${hazardous} hazardous NEO(s) detected with standard monitoring protocols active.` : "No hazardous NEOs today."} EONET shows ${enriched.events?.length ?? 0} active natural events.`,
-      },
-      insights: [
-        {
-          insight: `${hazardous} hazardous NEO classification today — compare miss distances against planetary defense thresholds`,
-          significance: hazardous > 0 ? "high" : "medium",
-          category: "Planetary Defense",
-        },
-        {
-          insight:
-            "APOD content reflects current NASA mission priorities and public science communication focus",
-          significance: "medium",
-          category: "Astronomy",
-        },
-        {
-          insight: `EONET tracking ${enriched.events?.length ?? 0} open events — natural disaster monitoring at current activity level`,
-          significance: "medium",
-          category: "Earth Science",
-        },
-      ],
-      scenarios: {
-        bull: "Current NASA mission tracks point toward upcoming discoveries.",
-        base: "Standard space weather and NEO monitoring continues.",
-        bear: "Orbital uncertainties on hazardous objects require continued tracking.",
-      },
-      bestUseCase:
-        "Ideal for science educators, space journalists, and planetary defense researchers tracking real-time NEO and Earth event data.",
-    };
-  }
-
-  // HN fallback
-  const top3 = (enriched?.stories ?? records)
+// ── Fallback ───────────────────────────────────────────────────────────────
+function buildFallback(
+  category: string,
+  subject: string,
+  records: any[],
+  enriched: any,
+): any {
+  const total = records.length;
+  const sources = [
+    ...new Set(
+      records.map((r: any) => r.Source || r.source || "data").filter(Boolean),
+    ),
+  ]
     .slice(0, 3)
-    .map((s: any) => s.title || s.Title || "")
-    .join("; ");
+    .join(", ");
   return {
-    summary: `Hacker News top stories reflect current developer priorities: "${top3}". The community's attention and score distribution reveals the most pressing technical and business topics in the ecosystem right now.`,
+    summary: `Fetched ${total} records about "${subject}" from ${sources || "multiple sources"}. The data covers various aspects of this topic across different source types. Review the Data tab for the complete structured records.`,
     prediction: {
-      result: "Tech Bullish",
-      confidence: "72%",
-      reason:
-        "High-scoring stories indicate strong community consensus around specific technology themes. Comment volume signals active debate and engagement.",
+      result: "Analysis Ready",
+      confidence: "65%",
+      reason: `${total} records fetched from ${sources || "multiple sources"}. Use the Insights tab for patterns and the Data tab for raw records.`,
     },
     insights: [
       {
-        insight:
-          "Top story point distribution follows power law — top 3 stories capture majority of attention",
+        insight: `${total} records fetched across sources: ${sources}`,
         significance: "high",
-        category: "Trend",
+        category: "Coverage",
       },
       {
         insight:
-          "Domain diversity reveals cross-pollination between academia, startups, and enterprise tech",
+          "Multiple source types provide cross-validated perspective on this topic",
         significance: "medium",
-        category: "Media",
+        category: "Depth",
       },
       {
         insight:
-          "Comment-to-score ratio identifies which topics generate debate vs simple approval",
+          "Use table view in Data tab to sort and compare records across sources",
         significance: "medium",
-        category: "Community",
+        category: "Usage",
       },
     ],
     scenarios: {
-      bull: "Dominant themes today predict next wave of tooling/startup activity in 6-12 months.",
-      base: "Current trends continue with incremental developer adoption.",
-      bear: "Regulatory or security stories signal potential headwinds for featured technologies.",
+      bull: "Best-case interpretation of the positive signals in this dataset",
+      base: "Most balanced reading of the full dataset",
+      bear: "Key concerns or risks visible in the data",
     },
-    bestUseCase:
-      "Use HN frontpage composition for trend intelligence — founders, VCs, and developers can identify emerging technology consensus 3-6 months before mainstream adoption.",
+    bestUseCase: `Download the JSON or CSV for further analysis of these ${total} records about "${subject}".`,
   };
 }
 
-// ── Main POST handler ──────────────────────────────────────────────────────
+// ── Main POST ──────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { userId } = auth();
     if (!userId)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { records, siteType, meta, enriched, rawText } = await req.json();
+    const {
+      records,
+      siteType,
+      meta,
+      enriched,
+      rawText,
+      category,
+      subjectLine,
+    } = await req.json();
     if (!records?.length)
       return NextResponse.json(
         { error: "No records to analyse" },
         { status: 400 },
       );
 
+    const cat = category || siteType || "general";
+    const subject =
+      subjectLine ||
+      enriched?.query ||
+      enriched?.subjectLine ||
+      meta?.sourceUrl ||
+      "the topic";
+
     let analysis: any = null;
 
     try {
-      const prompt = buildPrompt(siteType, records, rawText ?? "", enriched);
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": process.env.ANTHROPIC_API_KEY!,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2000,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-
-      const data = await res.json();
-      const raw = (data.content?.[0]?.text ?? "").trim();
-
-      // Try multiple parse strategies
-      for (const attempt of [
-        () => JSON.parse(raw),
-        () => JSON.parse(raw.replace(/```json\n?|```\n?/g, "").trim()),
-        () => {
-          const m = raw.match(/\{[\s\S]*\}/);
-          return m ? JSON.parse(m[0]) : null;
-        },
-      ]) {
-        try {
-          const parsed = attempt();
-          if (parsed?.summary && parsed?.prediction && parsed?.insights) {
-            analysis = parsed;
-            break;
-          }
-        } catch {
-          continue;
-        }
-      }
-    } catch (apiErr) {
-      console.error("Claude API error:", apiErr);
+      const prompt = buildPrompt(
+        cat,
+        subject,
+        records,
+        rawText ?? "",
+        enriched,
+      );
+      const raw = await callGroq(prompt);
+      analysis = parseJSON(raw);
+    } catch (err) {
+      console.error("Groq API error:", err);
     }
 
-    // Fallback if Claude fails
     if (!analysis) {
-      analysis = buildFallback(siteType, records, enriched);
+      analysis = buildFallback(cat, subject, records, enriched);
     }
 
-    // Attach stats
+    // Attach stats + news sentiment if available
     analysis.stats = {
       totalRecords: meta?.totalRecords ?? records.length,
       scrapedAt: meta?.scrapedAt ?? new Date().toISOString(),
       sourceUrl: meta?.sourceUrl ?? "",
       dataSize: meta?.dataSize ?? "~1 KB",
       topItem: String(Object.values(records[0])[0] ?? "").slice(0, 30),
+      category: cat,
+      subjectLine: subject,
       ...(enriched?.sentiment
         ? {
             bullishNews: enriched.sentiment.bullish,
@@ -547,7 +486,7 @@ export async function POST(req: NextRequest) {
           }
         : {}),
     };
-    analysis.siteType = siteType;
+    analysis.siteType = cat;
 
     return NextResponse.json({ success: true, analysis });
   } catch (err: any) {
