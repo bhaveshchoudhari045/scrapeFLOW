@@ -22,7 +22,7 @@ function Editor({ workflow }: { workflow: Workflow }) {
             workflowId={workflow.id}
             isPublished={workflow.status === WorkflowStatus.PUBLISHED}
           />
-          <section className="flex h-full overflow-auto">
+          <section className="flex h-full overflow-hidden">
             <TaskMenu />
             <FlowEditor workflow={workflow} />
           </section>

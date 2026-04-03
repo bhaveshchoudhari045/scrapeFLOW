@@ -8,7 +8,6 @@ import {
 import { ExecutionPhase } from "@prisma/client";
 import { AppNode } from "@/types/appNode";
 import { TaskRegistry } from "./task/registry";
-import { waitFor } from "../helper/waitFor";
 import { ExecutorRegistry } from "./executor/registry";
 import { Environment, ExecutionEnvironment } from "@/types/executor";
 import { TaskParamType } from "@/types/task";
@@ -16,6 +15,16 @@ import { Browser, Page } from "puppeteer";
 import { Edge } from "@xyflow/react";
 import { LogCollector } from "@/types/log";
 import { createLogCollector } from "../log";
+
+// ── Loop state type for array/repeat/until loops ──
+interface LoopState {
+  loopEndNodeId: string;
+  bodyNodeIds: string[];
+  sourceArray: any[];
+  currentIndex: number;
+  accumulatedResults: any[];
+  loopType: "array" | "repeat" | "until";
+}
 
 export async function ExecuteWorkflow(executionId: string, nextRunAt?: Date) {
   const execution = await prisma.workflowExecution.findUnique({
@@ -32,8 +41,8 @@ export async function ExecuteWorkflow(executionId: string, nextRunAt?: Date) {
   }
 
   const edges = JSON.parse(execution.definition).edges as Edge[];
-
   const environment: Environment = { phases: {} };
+
   await initalizeWorkflowExecution(
     executionId,
     execution.workflowId,
@@ -42,20 +51,18 @@ export async function ExecuteWorkflow(executionId: string, nextRunAt?: Date) {
   await initializePhaseStatuses(execution);
 
   let creditConsumed = 0;
-  let executionFailed = false;
-  for (const phase of execution.phases) {
-    const phaseExecution = await executeWorkflowPhase(
-      phase,
-      environment,
-      edges,
-      execution.userId,
-    );
-    creditConsumed += phaseExecution.creditsConsumed;
-    if (!phaseExecution.success) {
-      executionFailed = true;
-      break;
-    }
-  }
+
+  // ── Replaced simple for-loop with runExecutionLoop for loop/branch support ──
+  const executionFailed = await runExecutionLoop(
+    execution,
+    environment,
+    edges,
+    execution.userId,
+    (credits: number) => {
+      creditConsumed += credits;
+    },
+  );
+
   await finalizeWorkflowExecution(
     executionId,
     execution.workflowId,
@@ -64,6 +71,284 @@ export async function ExecuteWorkflow(executionId: string, nextRunAt?: Date) {
   );
   await cleanupEnvironment(environment);
   revalidatePath("/workflow/runs");
+}
+
+// ── Main execution loop with loop and branching support ──
+async function runExecutionLoop(
+  executionData: any,
+  environment: Environment,
+  edges: Edge[],
+  userId: string,
+  onCreditsConsumed: (credits: number) => void,
+): Promise<boolean> {
+  const activeLoops = new Map<string, LoopState>();
+  let phaseIndex = 0;
+  let executionFailed = false;
+
+  while (phaseIndex < executionData.phases.length) {
+    const phase = executionData.phases[phaseIndex];
+    const node = JSON.parse(phase.node) as AppNode;
+
+    // ── Skip phase if upstream branch excluded it ──
+    if (shouldSkipPhaseForBranching(node, edges, environment)) {
+      environment.phases[node.id] = {
+        inputs: {},
+        outputs: { __SKIPPED__: "true" },
+      };
+      await prisma.executionPhase.update({
+        where: { id: phase.id },
+        data: { status: "SKIPPED", completedAt: new Date() },
+      });
+      phaseIndex++;
+      continue;
+    }
+
+    // ── LOOP_START handling ──
+    const isLoopStart = [
+      "LOOP_START_ARRAY",
+      "LOOP_START_REPEAT",
+      "LOOP_START_UNTIL_CONDITION",
+    ].includes(node.data.type);
+
+    if (isLoopStart) {
+      const loopResult = await executeWorkflowPhase(
+        phase,
+        environment,
+        edges,
+        userId,
+      );
+      onCreditsConsumed(loopResult.creditsConsumed);
+      if (!loopResult.success) {
+        executionFailed = true;
+        break;
+      }
+
+      const outputs = environment.phases[node.id]?.outputs || {};
+
+      if (node.data.type === "LOOP_START_ARRAY") {
+        const sourceArray = JSON.parse(outputs["__SOURCE_ARRAY__"] || "[]");
+
+        if (sourceArray.length === 0) {
+          // Empty array — jump past the matching LOOP_END
+          const loopEndNodeId = outputs["__LOOP_END_ID__"];
+          const loopEndIdx = executionData.phases.findIndex(
+            (p: any) => JSON.parse(p.node).id === loopEndNodeId,
+          );
+          phaseIndex = loopEndIdx !== -1 ? loopEndIdx + 1 : phaseIndex + 1;
+          continue;
+        }
+
+        const bodyNodeIds = JSON.parse(outputs["__BODY_NODE_IDS__"] || "[]");
+        const loopEndNodeId = outputs["__LOOP_END_ID__"] || "";
+
+        activeLoops.set(node.id, {
+          loopEndNodeId,
+          bodyNodeIds,
+          sourceArray,
+          currentIndex: 0,
+          accumulatedResults: [],
+          loopType: "array",
+        });
+
+        // Inject first iteration item
+        environment.phases[node.id].outputs["Data"] = JSON.stringify(
+          sourceArray[0],
+        );
+        environment.phases[node.id].outputs["Current Index"] = "0";
+      }
+
+      phaseIndex++;
+      continue;
+    }
+
+    // ── LOOP_END handling ──
+    if (node.data.type === "LOOP_END") {
+      let parentLoop: LoopState | undefined;
+      let parentLoopId: string | undefined;
+
+      for (const [loopId, loopState] of activeLoops) {
+        if (loopState.loopEndNodeId === node.id) {
+          parentLoop = loopState;
+          parentLoopId = loopId;
+          break;
+        }
+      }
+
+      if (parentLoop && parentLoopId) {
+        const preserveInputs: Record<string, string> = {
+          __LOOP_ACCUMULATED__: JSON.stringify(parentLoop.accumulatedResults),
+          __LOOP_SUCCESS_COUNT__: String(parentLoop.accumulatedResults.length),
+        };
+
+        const continueSignal = parentLoop.bodyNodeIds.some(
+          (id) =>
+            environment.phases[id]?.outputs["__FLOW_CONTINUE__"] === "true",
+        );
+        if (continueSignal) preserveInputs["__FLOW_CONTINUE__"] = "true";
+
+        const phaseResult = await executeWorkflowPhase(
+          phase,
+          environment,
+          edges,
+          userId,
+          preserveInputs,
+        );
+        onCreditsConsumed(phaseResult.creditsConsumed);
+        if (!phaseResult.success) {
+          executionFailed = true;
+          break;
+        }
+
+        const accJson =
+          environment.phases[node.id]?.outputs["__LOOP_ACCUMULATED__"];
+        if (accJson) parentLoop.accumulatedResults = JSON.parse(accJson);
+
+        const breakSignal = parentLoop.bodyNodeIds.some(
+          (id) => environment.phases[id]?.outputs["__FLOW_BREAK__"] === "true",
+        );
+        const returnSignal = parentLoop.bodyNodeIds.some(
+          (id) => environment.phases[id]?.outputs["__FLOW_RETURN__"] === "true",
+        );
+
+        if (breakSignal || returnSignal) {
+          environment.phases[node.id].outputs["Data"] = JSON.stringify(
+            parentLoop.accumulatedResults,
+            null,
+            2,
+          );
+          activeLoops.delete(parentLoopId);
+          phaseIndex++;
+          continue;
+        }
+
+        if (parentLoop.currentIndex < parentLoop.sourceArray.length - 1) {
+          // Advance to next iteration
+          parentLoop.currentIndex++;
+          environment.phases[parentLoopId] = {
+            inputs: {},
+            outputs: {
+              Data: JSON.stringify(
+                parentLoop.sourceArray[parentLoop.currentIndex],
+              ),
+              "Current Index": String(parentLoop.currentIndex),
+              __SOURCE_ARRAY__: JSON.stringify(parentLoop.sourceArray),
+              __LOOP_END_ID__: parentLoop.loopEndNodeId,
+              __BODY_NODE_IDS__: JSON.stringify(parentLoop.bodyNodeIds),
+            },
+          };
+
+          // Reset body node outputs for the next iteration
+          for (const bodyId of parentLoop.bodyNodeIds) {
+            if (bodyId !== node.id) {
+              environment.phases[bodyId] = { inputs: {}, outputs: {} };
+            }
+          }
+
+          const loopStartIdx = executionData.phases.findIndex(
+            (p: any) => JSON.parse(p.node).id === parentLoopId,
+          );
+          phaseIndex = loopStartIdx !== -1 ? loopStartIdx + 1 : phaseIndex + 1;
+          continue;
+        } else {
+          // Loop exhausted — emit accumulated results and clean up
+          environment.phases[node.id].outputs["Data"] = JSON.stringify(
+            parentLoop.accumulatedResults,
+            null,
+            2,
+          );
+          activeLoops.delete(parentLoopId);
+        }
+      }
+
+      phaseIndex++;
+      continue;
+    }
+
+    // ── Normal phase execution ──
+    const result = await executeWorkflowPhase(
+      phase,
+      environment,
+      edges,
+      userId,
+    );
+    onCreditsConsumed(result.creditsConsumed);
+    if (!result.success) {
+      executionFailed = true;
+      break;
+    }
+
+    // ── FLOW_STOP: halt entire workflow ──
+    if (environment.phases[node.id]?.outputs["__FLOW_STOP__"] === "true") {
+      executionFailed = true;
+      break;
+    }
+
+    // ── FLOW_BREAK: exit innermost active loop ──
+    if (environment.phases[node.id]?.outputs["__FLOW_BREAK__"] === "true") {
+      for (const [loopId, loopState] of activeLoops) {
+        if (loopState.bodyNodeIds.includes(node.id)) {
+          const loopEndIdx = executionData.phases.findIndex(
+            (p: any) => JSON.parse(p.node).id === loopState.loopEndNodeId,
+          );
+          if (loopEndIdx !== -1) {
+            environment.phases[loopState.loopEndNodeId] = {
+              inputs: {},
+              outputs: {
+                Data: JSON.stringify(loopState.accumulatedResults, null, 2),
+              },
+            };
+            activeLoops.delete(loopId);
+            phaseIndex = loopEndIdx + 1;
+          }
+          break;
+        }
+      }
+      continue;
+    }
+
+    // ── FLOW_CONTINUE: jump to LOOP_END of innermost loop ──
+    let jumped = false;
+    if (environment.phases[node.id]?.outputs["__FLOW_CONTINUE__"] === "true") {
+      for (const [, loopState] of activeLoops) {
+        if (loopState.bodyNodeIds.includes(node.id)) {
+          const loopEndIdx = executionData.phases.findIndex(
+            (p: any) => JSON.parse(p.node).id === loopState.loopEndNodeId,
+          );
+          if (loopEndIdx !== -1) {
+            phaseIndex = loopEndIdx;
+            jumped = true;
+          }
+          break;
+        }
+      }
+    }
+
+    if (!jumped) phaseIndex++;
+  }
+
+  return executionFailed;
+}
+
+// ── Returns true if this node should be skipped due to upstream branch logic ──
+function shouldSkipPhaseForBranching(
+  node: AppNode,
+  edges: Edge[],
+  environment: Environment,
+): boolean {
+  const incoming = edges.filter((e) => e.target === node.id);
+  if (!incoming.length) return false;
+
+  return incoming.every((edge) => {
+    const srcOutputs = environment.phases[edge.source]?.outputs;
+    if (!srcOutputs) return false;
+    if (srcOutputs["__SKIPPED__"] === "true") return true;
+    const handle = edge.sourceHandle;
+    if (handle === "True" && srcOutputs["__BRANCH_TRUE__"] === "skipped")
+      return true;
+    if (handle === "False" && srcOutputs["__BRANCH_FALSE__"] === "skipped")
+      return true;
+    return false;
+  });
 }
 
 async function initalizeWorkflowExecution(
@@ -79,9 +364,7 @@ async function initalizeWorkflowExecution(
     },
   });
   await prisma.workflow.update({
-    where: {
-      id: workflowId,
-    },
+    where: { id: workflowId },
     data: {
       lastRunAt: new Date(),
       lastRunStatus: WorkflowExecutionStatus.RUNNING,
@@ -113,6 +396,7 @@ async function finalizeWorkflowExecution(
   const finalStatus = executionFailed
     ? WorkflowExecutionStatus.FAILED
     : WorkflowExecutionStatus.COMPLETED;
+
   await prisma.workflowExecution.update({
     where: { id: executionId },
     data: {
@@ -121,35 +405,36 @@ async function finalizeWorkflowExecution(
       creditsConsumed,
     },
   });
+
   await prisma.workflow
     .update({
-      where: {
-        id: workflowId,
-        lastRunId: executionId,
-      },
-      data: {
-        lastRunStatus: finalStatus,
-      },
+      where: { id: workflowId, lastRunId: executionId },
+      data: { lastRunStatus: finalStatus },
     })
-    .catch((err) => {
-      //ignore
-      //this means that we have triggered other runs for this workflow
-      // while an execution was running
+    .catch(() => {
+      // Ignore — a newer run has already updated lastRunId
     });
 }
 
+// ── Updated signature: accepts optional preserveInputs for loop boundary phases ──
 async function executeWorkflowPhase(
   phase: ExecutionPhase,
   environment: Environment,
   edges: Edge[],
   userId: string,
+  preserveInputs?: Record<string, string>,
 ) {
   const logCollector = createLogCollector();
   const startedAt = new Date();
   const node = JSON.parse(phase.node) as AppNode;
+
   setupEnvironmentForPhase(node, environment, edges);
 
-  //update phases status
+  // Merge any loop-injected inputs (e.g. __LOOP_ACCUMULATED__) on top of resolved inputs
+  if (preserveInputs) {
+    Object.assign(environment.phases[node.id].inputs, preserveInputs);
+  }
+
   await prisma.executionPhase.update({
     where: { id: phase.id },
     data: {
@@ -158,14 +443,15 @@ async function executeWorkflowPhase(
       inputs: JSON.stringify(environment.phases[node.id].inputs),
     },
   });
-  const creditsRequired = TaskRegistry[node.data.type].credits;
 
+  const creditsRequired = TaskRegistry[node.data.type].credits;
   let success = await decrementCredits(userId, creditsRequired, logCollector);
   const creditsConsumed = success ? creditsRequired : 0;
+
   if (success) {
-    //we can execute the phase if the credits are sufficient
     success = await executePhase(phase, node, environment, logCollector);
   }
+
   const outputs = environment.phases[node.id].outputs;
   await finalizePhase(
     phase.id,
@@ -187,6 +473,7 @@ async function finalizePhase(
   const finalStatus = success
     ? ExecutionPhaseStatus.COMPLETED
     : ExecutionPhaseStatus.FAILED;
+
   await prisma.executionPhase.update({
     where: { id: phaseId },
     data: {
@@ -219,6 +506,7 @@ async function executePhase(
     logCollector.error(`not found executor for ${node.data.type}`);
     return false;
   }
+
   const executionEnvironment: ExecutionEnvironment<any> =
     createExecutionEnvironment(node, environment, logCollector);
   return await runFn(executionEnvironment);
@@ -231,14 +519,16 @@ function setupEnvironmentForPhase(
 ) {
   environment.phases[node.id] = { inputs: {}, outputs: {} };
   const inputs = TaskRegistry[node.data.type].inputs;
+
   for (const input of inputs) {
     if (input.type === TaskParamType.BROWSER_INSTANCE) continue;
+
     const inputValue = node.data.inputs[input.name];
     if (inputValue) {
       environment.phases[node.id].inputs[input.name] = inputValue;
       continue;
     }
-    //Get input value from outputs in the environment
+
     const connectedEdge = edges.find(
       (edge) => edge.target === node.id && edge.targetHandle === input.name,
     );
@@ -252,6 +542,7 @@ function setupEnvironmentForPhase(
       );
       continue;
     }
+
     const outputValue =
       environment.phases[connectedEdge.source].outputs[
         connectedEdge.sourceHandle!
@@ -272,15 +563,13 @@ function createExecutionEnvironment(
     },
     getBrowser: () => environment.browser,
     setBrowser: (browser: Browser) => (environment.browser = browser),
-
     getPage: () => environment.page,
     setPage: (page: Page) => (environment.page = page),
-
     log: logCollector,
   };
 }
 
-//below code is only used for tracing error occured at 7:30:00
+// ── Closes the Puppeteer browser if one was opened during execution ──
 async function cleanupEnvironment(environment: Environment) {
   if (environment.browser) {
     await environment.browser
@@ -288,7 +577,6 @@ async function cleanupEnvironment(environment: Environment) {
       .catch((err) => console.error("Cannot close browser, reason: ", err));
   }
 }
-// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 async function decrementCredits(
   userId: string,

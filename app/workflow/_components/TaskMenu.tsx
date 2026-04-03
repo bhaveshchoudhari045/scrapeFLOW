@@ -1,85 +1,43 @@
 "use client";
 
 import React from "react";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { TaskType } from "@/types/task";
-import { Button } from "@/components/ui/button";
 import { TaskRegistry } from "@/lib/workflow/task/registry";
-import { CoinsIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { CoinsIcon } from "lucide-react";
+import { TaskType } from "@/types/task";
+
 export default function TaskMenu() {
+  const allTasks = Object.values(TaskRegistry).filter(Boolean) as Array<
+    NonNullable<(typeof TaskRegistry)[TaskType]>
+  >;
+
   return (
-    <aside className="w-[340px] min-w-[340px] max-w-[340px] border-r-2 border-separate h-full p-2 px-4 overflow-auto">
-      <Accordion
-        type="multiple"
-        className="w-full"
-        defaultValue={[
-          "extraction",
-          "interactions",
-          "storage",
-          "timing",
-          "results",
-        ]}
-      >
-        <AccordionItem value="interactions">
-          <AccordionTrigger className="font-bold">
-            User interactions
-          </AccordionTrigger>
-          <AccordionContent className="flex flex-col gap-1">
-            <TaskMenuBtn taskType={TaskType.NAVIGATE_URL} />
-            <TaskMenuBtn taskType={TaskType.FILL_INPUT} />
-            <TaskMenuBtn taskType={TaskType.CLICK_ELEMENT} />
-            <TaskMenuBtn taskType={TaskType.SCROLL_TO_ELEMENT} />
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="extraction">
-          <AccordionTrigger className="font-bold">
-            Data Extraction
-          </AccordionTrigger>
-          <AccordionContent className="flex flex-col gap-1">
-            <TaskMenuBtn taskType={TaskType.PAGE_TO_HTML} />
-            <TaskMenuBtn taskType={TaskType.EXTRACT_TEXT_FROM_ELEMENT} />
-            <TaskMenuBtn taskType={TaskType.EXTRACT_DATA_WITH_AI} />
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="storage">
-          <AccordionTrigger className="font-bold">
-            Data storage
-          </AccordionTrigger>
-          <AccordionContent className="flex flex-col gap-1">
-            <TaskMenuBtn taskType={TaskType.READ_PROPERTY_FROM_JSON} />
-            <TaskMenuBtn taskType={TaskType.ADD_PROPERTY_TO_JSON} />
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="timing">
-          <AccordionTrigger className="font-bold">
-            Timing controls
-          </AccordionTrigger>
-          <AccordionContent className="flex flex-col gap-1">
-            <TaskMenuBtn taskType={TaskType.WAIT_FOR_ELEMENT} />
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="timing">
-          <AccordionTrigger className="font-bold">
-            Result Delivery
-          </AccordionTrigger>
-          <AccordionContent className="flex flex-col gap-1">
-            <TaskMenuBtn taskType={TaskType.DELIVER_VIA_WEBHOOK} />
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+    <aside className="w-[340px] min-w-[340px] max-w-[340px] border-r border-gray-200 h-screen flex flex-col bg-white overflow-hidden">
+      {/* Sticky Header */}
+      <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10 shadow-sm">
+        <h2 className="font-bold text-lg text-gray-800">
+          Tasks ({allTasks.length})
+        </h2>
+      </div>
+
+      {/* Scrollable Tasks - Full remaining height */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300">
+        <div className="p-4 space-y-2">
+          {allTasks.map((task) => (
+            <TaskMenuBtn key={task.type} task={task} />
+          ))}
+        </div>
+      </div>
     </aside>
   );
 }
 
-function TaskMenuBtn({ taskType }: { taskType: TaskType }) {
-  const task = TaskRegistry[taskType];
-
+function TaskMenuBtn({
+  task,
+}: {
+  task: NonNullable<(typeof TaskRegistry)[TaskType]>;
+}) {
   const onDragStart = (event: React.DragEvent, type: TaskType) => {
     event.dataTransfer.setData("application/reactflow", type);
     event.dataTransfer.effectAllowed = "move";
@@ -87,18 +45,22 @@ function TaskMenuBtn({ taskType }: { taskType: TaskType }) {
 
   return (
     <Button
-      variant={"secondary"}
-      className="flex justify-between items-center gap-2 border w-full "
+      variant="ghost"
+      className="w-full justify-start h-12 px-4 py-2 hover:bg-gray-50 border-l-4 border-transparent hover:border-blue-500 transition-all"
       draggable
-      onDragStart={(event) => onDragStart(event, taskType)}
+      onDragStart={(event) => onDragStart(event, task.type)}
     >
-      <div className="flex gap-2">
-        <task.icon size={20} />
-        {task.label}
+      <div className="flex items-center gap-3 flex-1">
+        {task.icon ? (
+          <task.icon size={18} className="flex-shrink-0" />
+        ) : (
+          <div className="w-5 h-5 bg-gray-200 rounded" />
+        )}
+        <span className="font-medium text-sm">{task.label}</span>
       </div>
-      <Badge className="gap-2 flex items-center" variant={"outline"}>
-        <CoinsIcon size={16} />
-        {task.credits}
+      <Badge variant="outline" className="ml-auto">
+        <CoinsIcon size={12} />
+        <span className="ml-1 text-xs">{task.credits ?? 1}</span>
       </Badge>
     </Button>
   );
