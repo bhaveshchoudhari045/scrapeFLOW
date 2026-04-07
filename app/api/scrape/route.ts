@@ -7,7 +7,87 @@ const NASA_API_KEY = process.env.NASA_API_KEY || "DEMO_KEY";
 const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY!;
 const GROQ_API_KEY = process.env.GROQ_API_KEY!;
 
-// ── Sentiment scorer ────────────────────────────────────────────────
+// ── Only models confirmed working on free tier ──────────────────────
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+
+// ── Domains that always block scrapers → use NewsAPI instead ─────────
+const NEWS_API_DOMAINS = [
+  "reuters.com",
+  "bloomberg.com",
+  "nytimes.com",
+  "bbc.com",
+  "bbc.co.uk",
+  "theguardian.com",
+  "washingtonpost.com",
+  "ft.com",
+  "wsj.com",
+  "economist.com",
+  "apnews.com",
+  "cnn.com",
+  "aljazeera.com",
+  "ndtv.com",
+  "timesofindia.indiatimes.com",
+  "thehindu.com",
+  "economictimes.indiatimes.com",
+  "hindustantimes.com",
+  "indianexpress.com",
+];
+
+// ── Domains that block all scraping entirely ─────────────────────────
+const BLOCKED_DOMAINS = [
+  "statista.com",
+  "jstor.org",
+  "sciencedirect.com",
+  "researchgate.net",
+  "nature.com",
+  "ieeexplore.ieee.org",
+  "scholar.google.com",
+  "kaggle.com",
+  "ourworldindata.org",
+];
+
+async function callGroq(prompt: string, maxTokens = 3000): Promise<string> {
+  for (const model of GROQ_MODELS) {
+    try {
+      const res = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1,
+            max_tokens: maxTokens,
+          }),
+        },
+      );
+      if (res.status === 429) {
+        console.warn(`[groq] ${model} rate limited, trying next`);
+        continue;
+      }
+      if (res.status === 413) {
+        console.warn(`[groq] ${model} prompt too large, trying next`);
+        continue;
+      }
+      if (!res.ok) {
+        console.warn(`[groq] ${model} HTTP ${res.status}`);
+        continue;
+      }
+      const data = await res.json();
+      const text = (data.choices?.[0]?.message?.content ?? "").trim();
+      if (text) return text;
+    } catch (e: any) {
+      console.warn(`[groq] ${model}:`, e.message?.slice(0, 80));
+    }
+  }
+  return "";
+}
+
+// ── Sentiment ───────────────────────────────────────────────────────
 function sentiment(text: string): "🟢 Positive" | "🔴 Negative" | "🟡 Neutral" {
   const t = text.toLowerCase();
   const pos = [
@@ -26,9 +106,11 @@ function sentiment(text: string): "🟢 Positive" | "🔴 Negative" | "🟡 Neut
     "breakthrough",
     "success",
     "win",
-    "innovation",
     "positive",
-    "high",
+    "increase",
+    "improve",
+    "boost",
+    "advance",
   ];
   const neg = [
     "fall",
@@ -45,14 +127,15 @@ function sentiment(text: string): "🟢 Positive" | "🔴 Negative" | "🟡 Neut
     "concern",
     "warning",
     "debt",
-    "lawsuit",
-    "ban",
     "fail",
     "crisis",
     "war",
     "attack",
     "negative",
-    "low",
+    "decrease",
+    "threat",
+    "conflict",
+    "sanction",
   ];
   let s = 0;
   pos.forEach((w) => {
@@ -64,7 +147,6 @@ function sentiment(text: string): "🟢 Positive" | "🔴 Negative" | "🟡 Neut
   return s > 0 ? "🟢 Positive" : s < 0 ? "🔴 Negative" : "🟡 Neutral";
 }
 
-// ── Technical indicators ────────────────────────────────────────────
 function calcRSI(closes: number[], p = 14): number {
   if (closes.length < p + 1) return 50;
   let g = 0,
@@ -121,9 +203,133 @@ function fmtNum(n: string | number): string {
   return v.toLocaleString();
 }
 
-// ── Individual source fetchers ──────────────────────────────────────
+// ── Safe HTML fetch ─────────────────────────────────────────────────
+async function safeFetch(url: string, maxChars = 8000): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Cache-Control": "no-cache",
+      },
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      console.warn(
+        `[safeFetch] ${new URL(url).hostname} returned ${res.status}`,
+      );
+      return "";
+    }
+    const html = await res.text();
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+      .replace(/<header[\s\S]*?<\/header>/gi, "")
+      .replace(/<aside[\s\S]*?<\/aside>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, maxChars); // Strict limit to avoid 413
+  } catch (err: any) {
+    console.warn(
+      `[safeFetch] ${url.slice(0, 60)} failed:`,
+      err.message?.slice(0, 60),
+    );
+    return "";
+  }
+}
 
-async function fetchFromAlphaVantage(url: string, intent: string) {
+// ── Extract structured records from page text ───────────────────────
+async function extractWithGroq(
+  text: string,
+  intent: string,
+  sourceName: string,
+  url: string,
+): Promise<any[]> {
+  if (!text || text.length < 50) return [];
+
+  // Keep prompt small to avoid 413
+  const trimmedText = text.slice(0, 6000);
+
+  const raw = await callGroq(
+    `Extract structured data from this page for: "${intent.slice(0, 100)}"
+Source: ${sourceName}
+
+Page text:
+${trimmedText}
+
+Return ONLY a JSON array. No markdown. Start [ end ].
+- News articles: [{"_sourceName":"${sourceName}","_sourceType":"news","Title":"full title","Description":"full paragraph - keep complete","Author":"","Date":"YYYY-MM-DD","URL":"","Sentiment":""}]
+- Research papers: [{"_sourceName":"${sourceName}","_sourceType":"academic","Title":"","Authors":"","Abstract":"full abstract","Year":"","URL":""}]
+- Stats/tables: [{"_sourceName":"${sourceName}","_sourceType":"tabular","col1":"val","col2":"val"}]
+- Products: [{"_sourceName":"${sourceName}","_sourceType":"product","Name":"","Price":"","Rating":"","Specs":""}]
+Extract ALL items found. Minimum 5 if data exists.`,
+    3000,
+  );
+
+  if (!raw) return [];
+  let records: any[] = [];
+  try {
+    const m = raw.match(/\[[\s\S]*\]/);
+    if (m) records = JSON.parse(m[0]);
+  } catch {
+    try {
+      const fixed = raw.replace(/,\s*$/, "") + "]";
+      const m2 = fixed.match(/\[[\s\S]*/);
+      if (m2) records = JSON.parse(m2[0] + (m2[0].endsWith("]") ? "" : "]"));
+    } catch {}
+  }
+  console.log(`[extract] ${sourceName}: ${records.length} records`);
+  return records.filter(
+    (r: any) => Object.keys(r).filter((k) => !k.startsWith("_")).length >= 2,
+  );
+}
+
+// ── NewsAPI — fetches 30 articles for ANY news query ────────────────
+async function fetchFromNewsAPI(intent: string, sourceName = "News") {
+  if (!NEWS_API_KEY) return [];
+  const q = encodeURIComponent(
+    intent
+      .replace(
+        /(show|get|fetch|find|search|give me|scrape|current|information|about)/gi,
+        "",
+      )
+      .trim(),
+  );
+  try {
+    const res = await fetch(
+      `https://newsapi.org/v2/everything?q=${q}&sortBy=publishedAt&language=en&pageSize=30&apiKey=${NEWS_API_KEY}`,
+    );
+    const data = await res.json();
+    if (data.status !== "ok") return [];
+    return (data.articles ?? [])
+      .filter((a: any) => a.title && !a.title.includes("[Removed]"))
+      .map((a: any) => ({
+        _sourceName: a.source?.name || sourceName,
+        _sourceType: "news",
+        Source: a.source?.name || sourceName,
+        Title: a.title || "",
+        Description: a.description || "",
+        Content: (a.content || "").replace(/\[\+\d+ chars\]/, ""),
+        Author: a.author || "",
+        Date: a.publishedAt?.split("T")[0] || "",
+        URL: a.url || "",
+        Sentiment: sentiment((a.title || "") + " " + (a.description || "")),
+        _imageUrl: a.urlToImage || "",
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchFromAlphaVantage(intent: string) {
   const STOCKS: Record<string, { symbol: string; name: string }> = {
     reliance: { symbol: "RELIANCE.BSE", name: "Reliance Industries" },
     tata: { symbol: "TCS.BSE", name: "TCS" },
@@ -212,7 +418,6 @@ async function fetchFromAlphaVantage(url: string, intent: string) {
           : pct >= 30
             ? "🟥 Sell"
             : "🔴 Strong Sell";
-
   return [
     {
       _sourceName: "Alpha Vantage",
@@ -287,20 +492,6 @@ async function fetchFromAlphaVantage(url: string, intent: string) {
     {
       _sourceName: "Alpha Vantage",
       _sourceType: "finance",
-      Category: "📊 Fundamentals",
-      Metric: "Analyst Target",
-      Value: ov.AnalystTargetPrice ?? "N/A",
-    },
-    {
-      _sourceName: "Alpha Vantage",
-      _sourceType: "finance",
-      Category: "📊 Fundamentals",
-      Metric: "Beta",
-      Value: ov.Beta ?? "N/A",
-    },
-    {
-      _sourceName: "Alpha Vantage",
-      _sourceType: "finance",
       Category: "📈 Technicals",
       Metric: "Overall Signal",
       Value: sig,
@@ -323,46 +514,26 @@ async function fetchFromAlphaVantage(url: string, intent: string) {
       _sourceName: "Alpha Vantage",
       _sourceType: "finance",
       Category: "📈 Technicals",
-      Metric: "MA50 / MA200",
-      Value: `${ma50.toFixed(2)} / ${ma200.toFixed(2)}`,
-    },
-    {
-      _sourceName: "Alpha Vantage",
-      _sourceType: "finance",
-      Category: "📈 Technicals",
       Metric: "Trend",
       Value:
         ma50 > ma200 ? "📈 Bullish (Golden Cross)" : "📉 Bearish (Death Cross)",
     },
+    ...ohlcv.map((d) => ({
+      _sourceName: "Alpha Vantage",
+      _sourceType: "finance_timeseries",
+      Date: d.date,
+      Open: String(d.open),
+      High: String(d.high),
+      Low: String(d.low),
+      Close: String(d.close),
+      Volume: String(d.volume),
+    })),
   ].filter(
-    (r) => r.Value && r.Value !== "N/A / N/A" && r.Value !== "undefined",
+    (r: any) => r.Value && r.Value !== "N/A / N/A" && r.Value !== "undefined",
   );
 }
 
-async function fetchFromNewsAPI(url: string, intent: string) {
-  const q = encodeURIComponent(
-    intent.replace(/(show|get|fetch|find|search|give me)/gi, "").trim(),
-  );
-  const apiUrl = `https://newsapi.org/v2/everything?q=${q}&sortBy=publishedAt&language=en&pageSize=15&apiKey=${NEWS_API_KEY}`;
-  const res = await fetch(apiUrl);
-  const data = await res.json();
-  if (data.status !== "ok") return [];
-  return (data.articles ?? [])
-    .filter((a: any) => a.title && !a.title.includes("[Removed]"))
-    .map((a: any) => ({
-      _sourceName: a.source?.name || "News",
-      _sourceType: "news",
-      Source: a.source?.name || "",
-      Title: a.title || "",
-      Description: a.description?.slice(0, 200) || "",
-      Author: a.author || "",
-      Published: a.publishedAt?.split("T")[0] || "",
-      URL: a.url || "",
-      Sentiment: sentiment(a.title + " " + (a.description ?? "")),
-    }));
-}
-
-async function fetchFromNASA(url: string, intent: string) {
+async function fetchFromNASA(intent: string) {
   const today = new Date().toISOString().split("T")[0];
   const q = encodeURIComponent(
     intent.replace(/(show|get|nasa|space)/gi, "").trim() || "space",
@@ -398,7 +569,7 @@ async function fetchFromNASA(url: string, intent: string) {
       Type: "📸 APOD",
       Title: a.title,
       Date: a.date,
-      Summary: a.explanation?.slice(0, 300) + "...",
+      Description: a.explanation,
       URL: a.url,
       _imageUrl: a.media_type === "image" ? a.url : "",
     })),
@@ -408,7 +579,6 @@ async function fetchFromNASA(url: string, intent: string) {
       Type: "☄️ NEO",
       Name: a.name,
       Hazardous: a.is_potentially_hazardous_asteroid ? "⚠️ YES" : "✅ Safe",
-      Diameter: `${a.estimated_diameter?.kilometers?.estimated_diameter_min?.toFixed(3)}–${a.estimated_diameter?.kilometers?.estimated_diameter_max?.toFixed(3)} km`,
       "Miss Distance": `${parseFloat(a.close_approach_data?.[0]?.miss_distance?.kilometers ?? "0").toLocaleString()} km`,
       Velocity: `${parseFloat(a.close_approach_data?.[0]?.relative_velocity?.kilometers_per_hour ?? "0").toFixed(0)} km/h`,
       "Approach Date": a.close_approach_data?.[0]?.close_approach_date ?? "",
@@ -427,226 +597,314 @@ async function fetchFromNASA(url: string, intent: string) {
       _sourceType: "science",
       Type: "🖼️ NASA Image",
       Title: i.data?.[0]?.title,
-      Description: i.data?.[0]?.description?.slice(0, 200),
+      Description: i.data?.[0]?.description,
       Date: i.data?.[0]?.date_created?.split("T")[0],
       _imageUrl: i.links?.[0]?.href,
     })),
   ];
 }
 
-async function fetchFromSemanticScholar(url: string, intent: string) {
+async function fetchFromSemanticScholar(intent: string) {
   const q = encodeURIComponent(
     intent
       .replace(/(research|papers|study|studies|show|find|get)/gi, "")
       .trim(),
   );
-  const apiUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${q}&limit=10&fields=title,abstract,authors,year,citationCount,externalIds,publicationVenue,fieldsOfStudy`;
-  const res = await fetch(apiUrl, {
-    headers: { "User-Agent": "FlowScrape/1.0" },
-  });
-  const data = await res.json();
-  return (data?.data ?? [])
-    .map((p: any) => ({
-      _sourceName: "Semantic Scholar",
-      _sourceType: "academic",
-      Source: "🎓 Semantic Scholar",
-      Title: p.title ?? "",
-      Authors: (p.authors ?? [])
-        .slice(0, 3)
-        .map((a: any) => a.name)
-        .join(", "),
-      Year: String(p.year ?? ""),
-      Citations: String(p.citationCount ?? 0),
-      Abstract: p.abstract?.slice(0, 300) ?? "",
-      Venue: p.publicationVenue?.name ?? "",
-      Fields: (p.fieldsOfStudy ?? []).join(", "),
-      DOI: p.externalIds?.DOI ?? "",
-      URL: p.externalIds?.DOI ? `https://doi.org/${p.externalIds.DOI}` : "",
-    }))
-    .filter((r: any) => r.Title);
+  try {
+    const res = await fetch(
+      `https://api.semanticscholar.org/graph/v1/paper/search?query=${q}&limit=25&fields=title,abstract,authors,year,citationCount,externalIds,publicationVenue,fieldsOfStudy`,
+      { headers: { "User-Agent": "FlowScrape/1.0" } },
+    );
+    const data = await res.json();
+    return (data?.data ?? [])
+      .map((p: any) => ({
+        _sourceName: "Semantic Scholar",
+        _sourceType: "academic",
+        Source: "🎓 Semantic Scholar",
+        Title: p.title ?? "",
+        Authors: (p.authors ?? [])
+          .slice(0, 5)
+          .map((a: any) => a.name)
+          .join(", "),
+        Year: String(p.year ?? ""),
+        Citations: String(p.citationCount ?? 0),
+        Abstract: p.abstract ?? "",
+        Venue: p.publicationVenue?.name ?? "",
+        Fields: (p.fieldsOfStudy ?? []).join(", "),
+        URL: p.externalIds?.DOI ? `https://doi.org/${p.externalIds.DOI}` : "",
+      }))
+      .filter((r: any) => r.Title);
+  } catch {
+    return [];
+  }
 }
 
-async function fetchFromArXiv(url: string, intent: string) {
+async function fetchFromArXiv(intent: string) {
   const q = encodeURIComponent(
     intent.replace(/(research|papers|show|find|get)/gi, "").trim(),
   );
-  const apiUrl = `https://export.arxiv.org/api/query?search_query=all:${q}&start=0&max_results=8&sortBy=relevance`;
-  const res = await fetch(apiUrl);
-  const xml = await res.text();
-  const entries = xml.split("<entry>").slice(1);
-  return entries
-    .map((e) => {
-      const get = (tag: string) =>
-        e
-          .match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`))?.[1]
-          ?.replace(/<[^>]+>/g, "")
-          .trim() ?? "";
-      const authors = [...e.matchAll(/<name>(.*?)<\/name>/g)]
-        .slice(0, 3)
-        .map((m) => m[1])
-        .join(", ");
-      const arxivId = get("id").split("/abs/")[1] ?? "";
-      return {
-        _sourceName: "arXiv",
-        _sourceType: "academic",
-        Source: "📄 arXiv",
-        Title: get("title").replace(/\s+/g, " "),
-        Authors: authors,
-        Abstract: get("summary").slice(0, 300) + "…",
-        Published: get("published").slice(0, 10),
-        Categories:
+  try {
+    const res = await fetch(
+      `https://export.arxiv.org/api/query?search_query=all:${q}&start=0&max_results=25&sortBy=relevance`,
+    );
+    const xml = await res.text();
+    const entries = xml.split("<entry>").slice(1);
+    return entries
+      .map((e) => {
+        const get = (tag: string) =>
           e
-            .match(/term="([^"]+)"/g)
-            ?.slice(0, 2)
-            .map((t) => t.replace(/term="/, "").replace(/"/, ""))
-            .join(", ") ?? "",
-        URL: `https://arxiv.org/abs/${arxivId}`,
-      };
-    })
-    .filter((r) => r.Title);
+            .match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`))?.[1]
+            ?.replace(/<[^>]+>/g, "")
+            .trim() ?? "";
+        const authors = [...e.matchAll(/<name>(.*?)<\/name>/g)]
+          .slice(0, 5)
+          .map((m) => m[1])
+          .join(", ");
+        const arxivId = get("id").split("/abs/")[1] ?? "";
+        return {
+          _sourceName: "arXiv",
+          _sourceType: "academic",
+          Source: "📄 arXiv",
+          Title: get("title").replace(/\s+/g, " "),
+          Authors: authors,
+          Abstract: get("summary"),
+          Published: get("published").slice(0, 10),
+          URL: `https://arxiv.org/abs/${arxivId}`,
+        };
+      })
+      .filter((r) => r.Title);
+  } catch {
+    return [];
+  }
 }
 
-async function fetchFromPubMed(url: string, intent: string) {
+async function fetchFromPubMed(intent: string) {
   const q = encodeURIComponent(
     intent
       .replace(/(research|papers|show|find|get|medical|health)/gi, "")
       .trim(),
   );
-  const searchRes = await fetch(
-    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${q}&retmax=8&retmode=json&sort=relevance`,
-  );
-  const searchData = await searchRes.json();
-  const ids: string[] = searchData?.esearchresult?.idlist ?? [];
-  if (!ids.length) return [];
-  const sumRes = await fetch(
-    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(",")}&retmode=json`,
-  );
-  const sumData = await sumRes.json();
-  const result = sumData?.result ?? {};
-  return ids
-    .map((id) => {
-      const p = result[id] ?? {};
-      return {
-        _sourceName: "PubMed",
-        _sourceType: "academic",
-        Source: "🏥 PubMed",
-        Title: p.title ?? "",
-        Authors: (p.authors ?? [])
-          .slice(0, 3)
-          .map((a: any) => a.name)
-          .join(", "),
-        Journal: p.source ?? "",
-        Year: p.pubdate?.split(" ")[0] ?? "",
-        Citations: "NCBI",
-        Abstract: "",
-        URL: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
-      };
-    })
-    .filter((r) => r.Title);
+  try {
+    const searchRes = await fetch(
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${q}&retmax=25&retmode=json&sort=relevance`,
+    );
+    const searchData = await searchRes.json();
+    const ids: string[] = searchData?.esearchresult?.idlist ?? [];
+    if (!ids.length) return [];
+    const sumRes = await fetch(
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(",")}&retmode=json`,
+    );
+    const sumData = await sumRes.json();
+    const result = sumData?.result ?? {};
+    // Also fetch abstracts
+    const fetchRes = await fetch(
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${ids.slice(0, 10).join(",")}&retmode=xml`,
+    );
+    const xml = await fetchRes.text();
+    return ids
+      .map((id) => {
+        const p = result[id] ?? {};
+        const abstractMatch = xml.match(
+          new RegExp(
+            `<PMID[^>]*>${id}</PMID>[\\s\\S]*?<AbstractText[^>]*>([\\s\\S]*?)</AbstractText>`,
+            "i",
+          ),
+        );
+        const abstract =
+          abstractMatch?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "";
+        return {
+          _sourceName: "PubMed",
+          _sourceType: "academic",
+          Source: "🏥 PubMed",
+          Title: p.title ?? "",
+          Authors: (p.authors ?? [])
+            .slice(0, 5)
+            .map((a: any) => a.name)
+            .join(", "),
+          Journal: p.source ?? "",
+          Year: p.pubdate?.split(" ")[0] ?? "",
+          Abstract: abstract,
+          URL: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
+        };
+      })
+      .filter((r) => r.Title);
+  } catch {
+    return [];
+  }
 }
 
-async function fetchFromHackerNews(url: string, intent: string) {
+async function fetchFromHackerNews(intent: string) {
   const q = encodeURIComponent(
     intent.replace(/(show|get|hacker news|hn|tech news)/gi, "").trim() ||
       intent,
   );
-  const res = await fetch(
-    `https://hn.algolia.com/api/v1/search?query=${q}&tags=story&hitsPerPage=20`,
-  );
-  const data = await res.json();
-  return (data?.hits ?? [])
-    .map((s: any) => ({
-      _sourceName: "Hacker News",
-      _sourceType: "news",
-      Source: "⚡ Hacker News",
-      Title: s.title ?? "",
-      Score: `${s.points ?? 0} pts`,
-      Author: s.author ?? "",
-      Comments: String(s.num_comments ?? 0),
-      Date: s.created_at?.split("T")[0] ?? "",
-      Domain: s.url
-        ? (() => {
-            try {
-              return new URL(s.url).hostname.replace("www.", "");
-            } catch {
-              return "";
-            }
-          })()
-        : "",
-      URL: s.url ?? `https://news.ycombinator.com/item?id=${s.objectID}`,
-    }))
-    .filter((r: any) => r.Title);
+  try {
+    const res = await fetch(
+      `https://hn.algolia.com/api/v1/search?query=${q}&tags=story&hitsPerPage=30`,
+    );
+    const data = await res.json();
+    return (data?.hits ?? [])
+      .map((s: any) => ({
+        _sourceName: "Hacker News",
+        _sourceType: "news",
+        Source: "⚡ Hacker News",
+        Title: s.title ?? "",
+        Score: `${s.points ?? 0} pts`,
+        Author: s.author ?? "",
+        Comments: String(s.num_comments ?? 0),
+        Date: s.created_at?.split("T")[0] ?? "",
+        Domain: s.url
+          ? (() => {
+              try {
+                return new URL(s.url).hostname.replace("www.", "");
+              } catch {
+                return "";
+              }
+            })()
+          : "",
+        URL: s.url ?? `https://news.ycombinator.com/item?id=${s.objectID}`,
+        Sentiment: sentiment(s.title ?? ""),
+      }))
+      .filter((r: any) => r.Title);
+  } catch {
+    return [];
+  }
 }
 
-async function fetchFromReddit(url: string, intent: string) {
+async function fetchFromReddit(intent: string) {
   const q = encodeURIComponent(intent);
-  const res = await fetch(
-    `https://www.reddit.com/search.json?q=${q}&sort=top&limit=15&t=month`,
-    {
-      headers: { "User-Agent": "FlowScrape/1.0" },
-    },
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data?.data?.children ?? [])
-    .map((c: any) => c.data)
-    .filter(Boolean)
-    .map((p: any) => ({
-      _sourceName: `Reddit r/${p.subreddit}`,
-      _sourceType: "social",
-      Source: `💬 r/${p.subreddit}`,
-      Title: p.title ?? "",
-      Score: `${p.score} pts`,
-      Author: `u/${p.author}`,
-      Comments: String(p.num_comments),
-      Subreddit: `r/${p.subreddit}`,
-      Date: new Date((p.created_utc || 0) * 1000).toISOString().split("T")[0],
-      Sentiment: sentiment(p.title + " " + (p.selftext ?? "")),
-      URL: `https://reddit.com${p.permalink}`,
-    }))
-    .filter((r: any) => r.Title);
+  try {
+    const res = await fetch(
+      `https://www.reddit.com/search.json?q=${q}&sort=top&limit=25&t=month`,
+      { headers: { "User-Agent": "FlowScrape/1.0" } },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.data?.children ?? [])
+      .map((c: any) => c.data)
+      .filter(Boolean)
+      .map((p: any) => ({
+        _sourceName: `Reddit r/${p.subreddit}`,
+        _sourceType: "social",
+        Source: `💬 r/${p.subreddit}`,
+        Title: p.title ?? "",
+        Score: `${p.score} pts`,
+        Author: `u/${p.author}`,
+        Comments: String(p.num_comments),
+        Content: (p.selftext ?? "").slice(0, 500),
+        Date: new Date((p.created_utc || 0) * 1000).toISOString().split("T")[0],
+        Sentiment: sentiment(p.title + " " + (p.selftext ?? "")),
+        URL: `https://reddit.com${p.permalink}`,
+      }))
+      .filter((r: any) => r.Title);
+  } catch {
+    return [];
+  }
 }
 
 async function fetchFromWikipedia(url: string, intent: string) {
-  const q = intent.replace(/(show|get|find|about|what is)/gi, "").trim();
-  const [sumRes, searchRes] = await Promise.all([
-    fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q.replace(/ /g, "_"))}`,
-    ),
-    fetch(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=5&format=json&origin=*`,
-    ),
-  ]);
-  const [sumData, searchData] = await Promise.all([
-    sumRes.json(),
-    searchRes.json(),
-  ]);
-  const records = [];
-  if (sumData?.extract && sumData.type === "standard") {
-    records.push({
-      _sourceName: "Wikipedia",
-      _sourceType: "general",
-      Source: "📖 Wikipedia",
-      Title: sumData.title,
-      Abstract: sumData.extract?.slice(0, 400),
-      URL: sumData.content_urls?.desktop?.page ?? "",
-      Date: "Current",
-      _imageUrl: sumData.thumbnail?.source ?? "",
-    });
+  let articleTitle = "";
+  try {
+    const u = new URL(url);
+    if (u.pathname.startsWith("/wiki/")) {
+      articleTitle = decodeURIComponent(
+        u.pathname.replace("/wiki/", "").replace(/_/g, " "),
+      );
+    }
+  } catch {}
+  const q =
+    articleTitle ||
+    intent.replace(/(show|get|find|about|what is)/gi, "").trim();
+  try {
+    const [sumRes, searchRes] = await Promise.all([
+      fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q.replace(/ /g, "_"))}`,
+      ),
+      fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=10&format=json&origin=*`,
+      ),
+    ]);
+    const [sumData, searchData] = await Promise.all([
+      sumRes.json(),
+      searchRes.json(),
+    ]);
+    const records: any[] = [];
+    if (sumData?.extract && sumData.type === "standard") {
+      records.push({
+        _sourceName: "Wikipedia",
+        _sourceType: "general",
+        Source: "📖 Wikipedia",
+        Title: sumData.title,
+        Abstract: sumData.extract,
+        URL: sumData.content_urls?.desktop?.page ?? "",
+        Date: "Current",
+        _imageUrl: sumData.thumbnail?.source ?? "",
+      });
+    }
+    const searchResults = searchData?.query?.search ?? [];
+    records.push(
+      ...searchResults.slice(0, 8).map((r: any) => ({
+        _sourceName: "Wikipedia",
+        _sourceType: "general",
+        Source: "📖 Wikipedia",
+        Title: r.title,
+        Abstract: r.snippet?.replace(/<[^>]+>/g, "") ?? "",
+        URL: `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, "_"))}`,
+        Date: "Current",
+      })),
+    );
+    return records.filter((r) => r.Title);
+  } catch {
+    return [];
   }
-  const searchResults = searchData?.query?.search ?? [];
-  records.push(
-    ...searchResults.slice(0, 4).map((r: any) => ({
-      _sourceName: "Wikipedia",
-      _sourceType: "general",
-      Source: "📖 Wikipedia",
-      Title: r.title,
-      Abstract: r.snippet?.replace(/<[^>]+>/g, "") ?? "",
-      URL: `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, "_"))}`,
-      Date: "Current",
-    })),
-  );
-  return records.filter((r) => r.Title);
+}
+
+async function fetchFromCSV(url: string, sourceName: string) {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "FlowScrape/1.0" },
+    });
+    if (!res.ok) return [];
+    const text = await res.text();
+    const lines = text.trim().split("\n").filter(Boolean);
+    if (lines.length < 2) return [];
+    const parseRow = (line: string): string[] => {
+      const cols: string[] = [];
+      let cur = "",
+        inQ = false;
+      for (const ch of line) {
+        if (ch === '"') {
+          inQ = !inQ;
+          continue;
+        }
+        if (ch === "," && !inQ) {
+          cols.push(cur.trim());
+          cur = "";
+          continue;
+        }
+        cur += ch;
+      }
+      cols.push(cur.trim());
+      return cols;
+    };
+    const headers = parseRow(lines[0]);
+    return lines
+      .slice(1, 201)
+      .map((line) => {
+        const vals = parseRow(line);
+        const row: Record<string, string> = {
+          _sourceName: sourceName,
+          _sourceType: "tabular",
+        };
+        headers.forEach((h, i) => {
+          if (h) row[h] = vals[i] ?? "";
+        });
+        return row;
+      })
+      .filter((r) => Object.keys(r).length > 3);
+  } catch {
+    return [];
+  }
 }
 
 async function fetchFromFirecrawl(
@@ -655,77 +913,36 @@ async function fetchFromFirecrawl(
   sourceName: string,
 ) {
   if (!FIRECRAWL_KEY) return [];
-  const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${FIRECRAWL_KEY}`,
-    },
-    body: JSON.stringify({
-      url,
-      formats: ["markdown"],
-      onlyMainContent: true,
-      waitFor: 3000,
-    }),
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  if (!data.success || !data.data?.markdown) return [];
-
-  const markdown = data.data.markdown;
-
-  // Use Groq to extract structured records from the markdown
-  const structRes = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
+  try {
+    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
+        Authorization: `Bearer ${FIRECRAWL_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "user",
-            content: `Extract ALL relevant items from this page. User intent: "${intent}". Source: ${sourceName}
-
-Page content (markdown):
-${markdown.slice(0, 7000)}
-
-Return ONLY a raw JSON array. No markdown. Start with [ end with ]:
-For products: [{"_sourceName":"${sourceName}","_sourceType":"product","Name":"...","Price":"₹X,XXX","OriginalPrice":"₹X,XXX","Discount":"X% off","Rating":"X/5","Reviews":"X,XXX","Brand":"...","Specs":"...","Availability":"In Stock"}]
-For news/articles: [{"_sourceName":"${sourceName}","_sourceType":"news","Title":"...","Description":"...","Author":"...","Date":"...","URL":"..."}]
-For research: [{"_sourceName":"${sourceName}","_sourceType":"academic","Title":"...","Authors":"...","Abstract":"...","Year":"..."}]
-For general data: [{"_sourceName":"${sourceName}","_sourceType":"general","Title":"...","Content":"...","Value":"...","URL":"..."}]
-Extract up to 15 real items only.`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
+        url,
+        formats: ["markdown"],
+        onlyMainContent: true,
+        waitFor: 3000,
+        timeout: 20000,
       }),
-    },
-  );
-  const sData = await structRes.json();
-  const sRaw = (sData.choices?.[0]?.message?.content ?? "").trim();
-  let records: any[] = [];
-  try {
-    const m = sRaw.match(/\[[\s\S]*\]/);
-    if (m) records = JSON.parse(m[0]);
-  } catch {}
-
-  // Extract images from markdown
-  const imgs = (markdown.match(/!\[.*?\]\((https?:\/\/[^)]+)\)/g) ?? [])
-    .map((m: string) => m.match(/\((https?:\/\/[^)]+)\)/)?.[1] ?? "")
-    .filter(Boolean)
-    .slice(0, 8);
-
-  return records
-    .filter((r: any) => r.Name || r.Title || r.Content)
-    .map((r: any) => ({ ...r, _imageUrl: imgs[0] ?? "" }));
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data.success || !data.data?.markdown) return [];
+    return await extractWithGroq(
+      data.data.markdown.slice(0, 6000),
+      intent,
+      sourceName,
+      url,
+    );
+  } catch {
+    return [];
+  }
 }
 
-// ── Route each selected site to correct handler ─────────────────────
+// ── Route each site ─────────────────────────────────────────────────
 async function fetchFromSite(site: any, intent: string): Promise<any[]> {
   const domain =
     site.domain?.toLowerCase() ||
@@ -736,96 +953,77 @@ async function fetchFromSite(site: any, intent: string): Promise<any[]> {
         return "";
       }
     })();
+
+  console.log(`[scrape] → ${site.name} | ${domain}`);
+
   try {
-    // Finance APIs
+    // Structured free APIs
+    if (domain.includes("alphavantage"))
+      return await fetchFromAlphaVantage(intent);
+    if (domain === "newsapi.org") return await fetchFromNewsAPI(intent);
     if (
-      domain.includes("alphavantage") ||
-      domain.includes("finance.yahoo") ||
-      domain.includes("moneycontrol") ||
-      domain.includes("nseindia") ||
-      domain.includes("bseindia") ||
-      domain.includes("investing.com")
-    ) {
-      if (
-        domain.includes("alphavantage") ||
-        domain.includes("yahoo") ||
-        domain.includes("moneycontrol") ||
-        domain.includes("nseindia") ||
-        domain.includes("bseindia")
-      ) {
-        return await fetchFromAlphaVantage(site.url, intent);
-      }
-    }
-    // News APIs
+      domain.includes("nasa.gov") ||
+      domain.includes("eonet.gsfc") ||
+      domain.includes("images-api.nasa")
+    )
+      return await fetchFromNASA(intent);
+    if (domain.includes("semanticscholar.org"))
+      return await fetchFromSemanticScholar(intent);
+    if (domain.includes("arxiv.org")) return await fetchFromArXiv(intent);
     if (
-      domain.includes("newsapi") ||
-      domain.includes("reuters") ||
-      domain.includes("bbc") ||
-      domain.includes("guardian") ||
-      domain.includes("ndtv") ||
-      domain.includes("timesofindia") ||
-      domain.includes("thehindu") ||
-      domain.includes("economictimes") ||
-      domain.includes("bloomberg") ||
-      domain.includes("cnn") ||
-      domain.includes("aljazeera") ||
-      domain.includes("apnews")
-    ) {
-      return await fetchFromNewsAPI(site.url, intent);
-    }
-    // NASA
-    if (
-      domain.includes("nasa") ||
-      domain.includes("jpl") ||
-      domain.includes("spacenews") ||
-      domain.includes("space.com") ||
-      domain.includes("astronomy") ||
-      domain.includes("esa")
-    ) {
-      return await fetchFromNASA(site.url, intent);
-    }
-    // Academic — Semantic Scholar
-    if (
-      domain.includes("semanticscholar") ||
-      domain.includes("scholar.google")
-    ) {
-      return await fetchFromSemanticScholar(site.url, intent);
-    }
-    // arXiv
-    if (domain.includes("arxiv")) {
-      return await fetchFromArXiv(site.url, intent);
-    }
-    // PubMed / NCBI
-    if (
-      domain.includes("pubmed") ||
-      domain.includes("ncbi") ||
-      domain.includes("nih.gov") ||
-      domain.includes("medRxiv") ||
-      domain.includes("biorxiv")
-    ) {
-      return await fetchFromPubMed(site.url, intent);
-    }
-    // Hacker News
-    if (domain.includes("ycombinator") || domain.includes("news.ycomb")) {
-      return await fetchFromHackerNews(site.url, intent);
-    }
-    // Reddit
-    if (domain.includes("reddit")) {
-      return await fetchFromReddit(site.url, intent);
-    }
-    // Wikipedia
-    if (domain.includes("wikipedia")) {
+      domain.includes("pubmed.ncbi") ||
+      domain.includes("ncbi.nlm.nih") ||
+      domain.includes("medrxiv.org") ||
+      domain.includes("biorxiv.org")
+    )
+      return await fetchFromPubMed(intent);
+    if (domain.includes("ycombinator.com"))
+      return await fetchFromHackerNews(intent);
+    if (domain.includes("reddit.com")) return await fetchFromReddit(intent);
+    if (domain.includes("wikipedia.org"))
       return await fetchFromWikipedia(site.url, intent);
+
+    // CSV files
+    if (
+      site.url?.endsWith(".csv") ||
+      domain.includes("raw.githubusercontent.com")
+    )
+      return await fetchFromCSV(site.url, site.name);
+
+    // Sites that always block scraping → use NewsAPI with source filter
+    const isBlockedDomain = BLOCKED_DOMAINS.some((d) => domain.includes(d));
+    if (isBlockedDomain) {
+      console.log(
+        `[scrape] ${site.name} is blocked domain, using NewsAPI fallback`,
+      );
+      return await fetchFromNewsAPI(intent, site.name);
     }
-    // E-commerce / all other — Firecrawl
-    return await fetchFromFirecrawl(site.url, intent, site.name);
-  } catch (err) {
-    console.error(`Failed fetching ${site.name}:`, err);
+
+    // News sites that block direct fetch → use NewsAPI
+    const isNewsDomain = NEWS_API_DOMAINS.some((d) => domain.includes(d));
+    if (isNewsDomain) {
+      console.log(`[scrape] ${site.name} is news domain, using NewsAPI`);
+      return await fetchFromNewsAPI(intent, site.name);
+    }
+
+    // Try Firecrawl first for other sites
+    if (FIRECRAWL_KEY) {
+      const fc = await fetchFromFirecrawl(site.url, intent, site.name);
+      if (fc.length > 0) return fc;
+    }
+
+    // Direct fetch fallback
+    const text = await safeFetch(site.url);
+    if (text) return await extractWithGroq(text, intent, site.name, site.url);
+
+    return [];
+  } catch (err: any) {
+    console.error(`[scrape] Failed ${site.name}:`, err.message?.slice(0, 100));
     return [];
   }
 }
 
-// ── POST handler ────────────────────────────────────────────────────
+// ── POST ────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { userId } = auth();
@@ -839,15 +1037,13 @@ export async function POST(req: NextRequest) {
     if (!selectedSites?.length)
       return NextResponse.json({ error: "No sites selected" }, { status: 400 });
 
-    // Fetch all selected sites in parallel
     const results = await Promise.allSettled(
       selectedSites.map((site: any) => fetchFromSite(site, intent)),
     );
 
-    const allRecords: any[] = [];
-    const allImages: string[] = [];
-    const sourceNames: string[] = [];
-
+    const allRecords: any[] = [],
+      allImages: string[] = [],
+      sourceNames: string[] = [];
     results.forEach((result, i) => {
       const site = selectedSites[i];
       if (result.status === "fulfilled" && result.value?.length) {
@@ -856,25 +1052,19 @@ export async function POST(req: NextRequest) {
           if (r._imageUrl) allImages.push(r._imageUrl);
         });
         sourceNames.push(site.name);
+        console.log(`[scrape] ✓ ${site.name}: ${result.value.length} records`);
+      } else {
+        console.warn(`[scrape] ✗ ${site.name}: 0 records`);
       }
     });
 
-    if (!allRecords.length) {
+    if (!allRecords.length)
       return NextResponse.json({
         error: "no_data",
         message:
           "Could not fetch data from selected sources. Try different sites or rephrase your query.",
-        suggestions: [
-          "Show Apple stock analysis",
-          "CRISPR gene editing research",
-          "Laptops on Flipkart",
-          "NASA space news",
-          "Hacker News top stories",
-        ],
       });
-    }
 
-    // Clean records — remove internal _fields from display but keep for enriched
     const cleanRecords = allRecords
       .map((r) => {
         const clean: Record<string, string> = {};
@@ -886,16 +1076,18 @@ export async function POST(req: NextRequest) {
             String(v).trim() &&
             String(v) !== "0"
           ) {
-            clean[k] = String(v).slice(0, 400);
+            clean[k] = String(v);
           }
         }
         return clean;
       })
       .filter((r) => Object.keys(r).length > 1);
 
-    // Build enriched for AIXPLORE
     const financeRecords = allRecords.filter(
       (r) => r._sourceType === "finance",
+    );
+    const timeseriesRecords = allRecords.filter(
+      (r) => r._sourceType === "finance_timeseries",
     );
     const academicRecords = allRecords.filter(
       (r) => r._sourceType === "academic",
@@ -905,7 +1097,9 @@ export async function POST(req: NextRequest) {
       (r) => r._sourceType === "product",
     );
     const socialRecords = allRecords.filter((r) => r._sourceType === "social");
-
+    const tabularRecords = allRecords.filter(
+      (r) => r._sourceType === "tabular",
+    );
     const bullishNews = newsRecords.filter((r) =>
       String(r.Sentiment || "").includes("Positive"),
     ).length;
@@ -913,7 +1107,6 @@ export async function POST(req: NextRequest) {
       String(r.Sentiment || "").includes("Negative"),
     ).length;
 
-    // Determine siteType for AIXPLORE
     const siteType =
       queryCategory === "finance"
         ? "finance_deep"
@@ -927,7 +1120,23 @@ export async function POST(req: NextRequest) {
                 ? "health_medical"
                 : queryCategory === "social"
                   ? "social_reddit"
-                  : "general_news";
+                  : queryCategory === "sports" || queryCategory === "statistics"
+                    ? "statistics"
+                    : "general_news";
+
+    // Build rich raw text for AI analysis — actual content not metadata
+    const fullRawText = allRecords
+      .filter((r) => r.Abstract || r.Description || r.Content || r.Summary)
+      .map(
+        (r) =>
+          `[${r._sourceName}] ${r.Title || r.Name || ""}\n${r.Abstract || r.Description || r.Content || r.Summary || ""}`,
+      )
+      .join("\n\n---\n\n")
+      .slice(0, 80000);
+
+    console.log(
+      `[scrape] Total: ${allRecords.length} records from ${sourceNames.length} sources`,
+    );
 
     return NextResponse.json({
       success: true,
@@ -942,15 +1151,8 @@ export async function POST(req: NextRequest) {
       },
       data: {
         records: cleanRecords,
-        images: [...new Set(allImages)].filter(Boolean).slice(0, 15),
-        rawText: allRecords
-          .slice(0, 10)
-          .map(
-            (r) =>
-              `[${r._sourceName}] ${r.Title || r.Name || ""}: ${r.Abstract || r.Description || r.Summary || ""}`,
-          )
-          .join("\n\n")
-          .slice(0, 6000),
+        images: [...new Set(allImages)].filter(Boolean).slice(0, 20),
+        rawText: fullRawText,
       },
       meta: {
         totalRecords: cleanRecords.length,
@@ -960,7 +1162,7 @@ export async function POST(req: NextRequest) {
         sourcesUsed: sourceNames,
       },
       enriched: {
-        sourceResults: sourceNames.map((name, i) => ({
+        sourceResults: sourceNames.map((name) => ({
           name,
           count: allRecords.filter(
             (r) => r._sourceName === name || r._sourceName?.includes(name),
@@ -980,12 +1182,15 @@ export async function POST(req: NextRequest) {
           bearish: bearishNews,
           neutral: newsRecords.length - bullishNews - bearishNews,
         },
-        financeData: financeRecords.length > 0 ? financeRecords[0] : null,
+        financeData: financeRecords.length > 0 ? financeRecords : null,
+        timeseriesData: timeseriesRecords.length > 0 ? timeseriesRecords : null,
         academicPapers: academicRecords,
         newsArticles: newsRecords,
         products: productRecords,
         socialPosts: socialRecords,
+        tabularData: tabularRecords,
         query: intent,
+        _fullRecords: allRecords,
       },
     });
   } catch (err: any) {

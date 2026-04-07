@@ -16,7 +16,7 @@ export function FlowToExecutionPlan(
   edges: Edge[],
 ): FlowToExecutionPlanType {
   const entryPoint = nodes.find(
-    (node) => TaskRegistry[node.data.type].isEntryPoint,
+    (node) => TaskRegistry[node.data.type]?.isEntryPoint,
   );
   if (!entryPoint) {
     throw new Error("TODO : HANDLE THIS ERROR");
@@ -69,7 +69,7 @@ export function FlowToExecutionPlan(
 }
 function getInvalidInputs(node: AppNode, edges: Edge[], planned: Set<string>) {
   const invalidInputs = [];
-  const inputs = TaskRegistry[node.data.type].inputs;
+  const inputs = TaskRegistry[node.data.type]?.inputs ?? [];
   for (const input of inputs) {
     const inputValue = node.data.inputs[input.name];
     const inputValueProvided = inputValue?.length > 0;

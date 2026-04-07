@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2015", // Or higher (ES2020, ESNext)
+    "target": "ES2018", // Or higher (ES2020, ESNext)
     "downlevelIteration": true, // Only if you MUST target ES5
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,

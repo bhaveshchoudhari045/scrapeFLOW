@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Props {
   analysis: any;
@@ -12,159 +12,80 @@ interface Props {
   onRescrape: () => void;
 }
 
-type Tab = "overview" | "data" | "insights" | "predictions" | "news";
+type Tab = "overview" | "data" | "insights" | "charts" | "ml" | "predictions";
 
-/* ── Helpers ──────────────────────────────────────────────────────────────── */
+// ── Design tokens ─────────────────────────────────────────────────────────
+const C = {
+  cyan: "#00f5ff",
+  violet: "#a78bfa",
+  green: "#34d399",
+  gold: "#f59e0b",
+  red: "#ef4444",
+  pink: "#f472b6",
+  slate: "#94a3b8",
+  dim: "#475569",
+  text: "#e2e8f0",
+  muted: "#64748b",
+  bg0: "#04040a",
+  bg1: "rgba(255,255,255,0.025)",
+  bg2: "rgba(255,255,255,0.04)",
+  border: "rgba(255,255,255,0.07)",
+};
+
+const PALETTE = [
+  "#00f5ff",
+  "#a78bfa",
+  "#34d399",
+  "#f59e0b",
+  "#ef4444",
+  "#f472b6",
+  "#818cf8",
+  "#fb923c",
+  "#4ade80",
+];
+
 function getSiteConfig(siteType: string) {
-  // Finance
   if (siteType === "finance_deep")
-    return { icon: "📈", label: "Deep Stock Analysis", color: "#00f5c8" };
-  if (siteType === "finance_watchlist" || siteType === "finance_stocks")
-    return { icon: "📊", label: "Market Watchlist", color: "#00c8d4" };
-  if (siteType === "finance_crypto")
-    return { icon: "₿", label: "Crypto Markets", color: "#f59e0b" };
-  if (siteType === "general_news" && false)
-    // keep below for other checks
-    return { icon: "📰", label: "Market News", color: "#94a3b8" };
-
-  // Science
-  if (siteType === "science_space" || siteType === "science")
-    return { icon: "🔭", label: "NASA Intelligence", color: "#a78bfa" };
-
-  // Tech / News
-  if (siteType === "news" || siteType === "social_hn")
-    return { icon: "⚡", label: "Tech Intelligence", color: "#f59e0b" };
-  if (siteType === "technology")
-    return { icon: "💻", label: "Technology", color: "#6ee7f7" };
-
-  // Academic
+    return { icon: "📈", label: "Stock Analysis", color: C.cyan };
+  if (siteType === "science_space")
+    return { icon: "🔭", label: "NASA Intelligence", color: C.violet };
   if (siteType === "academic_research")
-    return { icon: "🎓", label: "Research Intelligence", color: "#818cf8" };
-
-  // Health
-  if (siteType === "health_medical" || siteType === "health_medicine")
-    return { icon: "🏥", label: "Medical Research", color: "#34d399" };
-
-  // E-commerce
+    return { icon: "🎓", label: "Research Intel", color: C.violet };
+  if (siteType === "health_medical")
+    return { icon: "🏥", label: "Medical Research", color: C.green };
   if (siteType === "ecommerce_product")
     return { icon: "🛒", label: "Product Analysis", color: "#fb923c" };
-
-  // News / current events
-  if (siteType === "news_current" || siteType === "general_news")
-    return { icon: "📰", label: "News Analysis", color: "#94a3b8" };
-
-  // Social
-  if (siteType === "social_reddit" || siteType === "reddit_discussion")
+  if (siteType === "social_reddit")
     return { icon: "💬", label: "Community Intel", color: "#ff6b4a" };
-
-  // Sports
-  if (siteType === "sports")
-    return { icon: "🏆", label: "Sports Intel", color: "#facc15" };
-
-  // Entertainment
-  if (siteType === "entertainment")
-    return { icon: "🎬", label: "Entertainment", color: "#e879f9" };
-
-  // Environment
-  if (siteType === "environment" || siteType === "environment_climate")
-    return { icon: "🌿", label: "Climate Intelligence", color: "#4ade80" };
-
-  // Direct URL / unknown
-  if (siteType === "direct_url")
-    return { icon: "🔗", label: "Web Scrape", color: "#64748b" };
-
-  return { icon: "◈", label: "Data Intelligence", color: "#00f5c8" };
+  if (["news", "general_news"].includes(siteType))
+    return { icon: "📰", label: "News Analysis", color: C.slate };
+  return { icon: "◈", label: "Data Intelligence", color: C.cyan };
 }
 
-function getSignalColor(text: string) {
+function signalColor(text: string) {
   const t = (text ?? "").toLowerCase();
-  if (t.includes("strong buy") || t.includes("bullish") || t.includes("buy"))
-    return "#00f5c8";
-  if (t.includes("strong sell") || t.includes("bearish") || t.includes("sell"))
-    return "#ef4444";
+  if (
+    t.includes("strong buy") ||
+    t.includes("bullish") ||
+    t.includes("buy") ||
+    t.includes("positive") ||
+    t.includes("strong evidence")
+  )
+    return C.green;
+  if (
+    t.includes("strong sell") ||
+    t.includes("bearish") ||
+    t.includes("sell") ||
+    t.includes("negative")
+  )
+    return C.red;
   if (t.includes("hold") || t.includes("neutral") || t.includes("mixed"))
-    return "#f59e0b";
-  if (t.includes("discovery") || t.includes("alert")) return "#a78bfa";
-  return "#94a3b8";
+    return C.gold;
+  if (t.includes("alert") || t.includes("discovery")) return C.violet;
+  return C.slate;
 }
 
-function ConfidenceBar({ pct, color }: { pct: number; color: string }) {
-  return (
-    <div style={{ marginTop: "0.75rem" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: "0.65rem",
-          color: "#64748b",
-          marginBottom: "0.35rem",
-        }}
-      >
-        <span>Confidence</span>
-        <span style={{ color }}>{pct}%</span>
-      </div>
-      <div
-        style={{
-          height: "4px",
-          background: "rgba(255,255,255,0.06)",
-          borderRadius: "2px",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${pct}%`,
-            background: `linear-gradient(90deg, ${color}88, ${color})`,
-            borderRadius: "2px",
-            transition: "width 1s ease",
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function Badge({ text, color }: { text: string; color?: string }) {
-  return (
-    <span
-      style={{
-        fontSize: "0.6rem",
-        padding: "0.2rem 0.5rem",
-        borderRadius: "4px",
-        background: `${color ?? "#00f5c8"}18`,
-        color: color ?? "#00f5c8",
-        border: `1px solid ${color ?? "#00f5c8"}30`,
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {text}
-    </span>
-  );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: "0.6rem",
-        letterSpacing: "0.18em",
-        textTransform: "uppercase",
-        color: "#475569",
-        marginBottom: "0.75rem",
-        display: "flex",
-        alignItems: "center",
-        gap: "0.5rem",
-      }}
-    >
-      <div style={{ width: "16px", height: "1px", background: "#475569" }} />
-      {children}
-    </div>
-  );
-}
-
+// ── Shared primitives ─────────────────────────────────────────────────────
 function GlassCard({
   children,
   style,
@@ -175,9 +96,9 @@ function GlassCard({
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "12px",
+        background: C.bg1,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
         padding: "1.25rem",
         marginBottom: "0.875rem",
         ...style,
@@ -188,33 +109,385 @@ function GlassCard({
   );
 }
 
-/* ── Overview Tab ─────────────────────────────────────────────────────────── */
-function OverviewTab({
-  analysis,
-  siteType,
-  meta,
-  enriched,
-}: {
-  analysis: any;
-  siteType: string;
-  meta: any;
-  enriched?: any;
-}) {
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: "0.58rem",
+        letterSpacing: "0.18em",
+        textTransform: "uppercase",
+        color: C.muted,
+        marginBottom: "0.75rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+      }}
+    >
+      <div style={{ width: 14, height: 1, background: C.muted }} />
+      {children}
+    </div>
+  );
+}
+
+function Badge({ text, color }: { text: string; color?: string }) {
+  const c = color ?? C.cyan;
+  return (
+    <span
+      style={{
+        fontSize: "0.58rem",
+        padding: "0.18rem 0.5rem",
+        borderRadius: 4,
+        background: `${c}18`,
+        color: c,
+        border: `1px solid ${c}28`,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function ConfBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div style={{ marginTop: "0.75rem" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: "0.62rem",
+          color: C.muted,
+          marginBottom: "0.3rem",
+        }}
+      >
+        <span>Confidence</span>
+        <span style={{ color }}>{pct}%</span>
+      </div>
+      <div
+        style={{
+          height: 4,
+          background: "rgba(255,255,255,0.06)",
+          borderRadius: 2,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            background: `linear-gradient(90deg,${color}70,${color})`,
+            borderRadius: 2,
+            transition: "width 1.2s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Chart renderer — pure SVG/HTML canvas ─────────────────────────────────
+function ChartCard({ chart }: { chart: any }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const W = 520,
+    H = 220;
+
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c || !chart?.data?.length) return;
+    const ctx = c.getContext("2d")!;
+    ctx.clearRect(0, 0, W, H);
+
+    const PAD = { top: 20, right: 20, bottom: 50, left: 55 };
+    const pw = W - PAD.left - PAD.right;
+    const ph = H - PAD.top - PAD.bottom;
+
+    // Background
+    ctx.fillStyle = "#07071a";
+    ctx.roundRect(0, 0, W, H, 10);
+    ctx.fill();
+
+    // Grid lines
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = PAD.top + (ph / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, y);
+      ctx.lineTo(W - PAD.right, y);
+      ctx.stroke();
+    }
+
+    const color = chart.color || C.cyan;
+    const data = chart.data;
+
+    if (chart.type === "bar" || chart.type === "histogram") {
+      const vals = data.map((d: any) => (typeof d.y === "number" ? d.y : 0));
+      const maxV = Math.max(...vals, 1);
+      const minV = Math.min(0, ...vals);
+      const range = maxV - minV || 1;
+      const bw = pw / data.length;
+
+      // Y-axis labels
+      ctx.fillStyle = C.muted;
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const v = minV + (range / 4) * (4 - i);
+        ctx.fillText(
+          v >= 1e6
+            ? `${(v / 1e6).toFixed(1)}M`
+            : v >= 1e3
+              ? `${(v / 1e3).toFixed(1)}K`
+              : v.toFixed(1),
+          PAD.left - 6,
+          PAD.top + (ph / 4) * i + 3,
+        );
+      }
+
+      data.forEach((d: any, i: number) => {
+        const barH = ((d.y - minV) / range) * ph;
+        const x = PAD.left + i * bw + bw * 0.1;
+        const bwActual = bw * 0.8;
+        const y = PAD.top + ph - barH;
+        const grad = ctx.createLinearGradient(x, y, x, PAD.top + ph);
+        grad.addColorStop(0, color);
+        grad.addColorStop(1, `${color}22`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.roundRect(x, y, bwActual, barH, [3, 3, 0, 0]);
+        ctx.fill();
+
+        if (bw > 25) {
+          ctx.fillStyle = C.muted;
+          ctx.font = "8px sans-serif";
+          ctx.textAlign = "center";
+          ctx.save();
+          ctx.translate(x + bwActual / 2, PAD.top + ph + 12);
+          ctx.rotate(-Math.PI / 5);
+          ctx.fillText(String(d.x ?? "").slice(0, 12), 0, 0);
+          ctx.restore();
+        }
+      });
+    }
+
+    if (chart.type === "line" || chart.type === "area") {
+      const vals = data.map((d: any) =>
+        typeof d.y === "number"
+          ? d.y
+          : typeof d.close === "number"
+            ? d.close
+            : 0,
+      );
+      const maxV = Math.max(...vals, 1);
+      const minV = Math.min(...vals);
+      const range = maxV - minV || 1;
+
+      ctx.fillStyle = C.muted;
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const v = maxV - (range / 4) * i;
+        ctx.fillText(
+          v >= 1e3 ? `${(v / 1e3).toFixed(1)}K` : v.toFixed(1),
+          PAD.left - 6,
+          PAD.top + (ph / 4) * i + 3,
+        );
+      }
+
+      const pts = vals.map((v:any, i:any) => ({
+        x: PAD.left + (i / (data.length - 1)) * pw,
+        y: PAD.top + ((maxV - v) / range) * ph,
+      }));
+
+      if (chart.type === "area") {
+        const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + ph);
+        grad.addColorStop(0, `${color}55`);
+        grad.addColorStop(1, `${color}00`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, PAD.top + ph);
+        pts.forEach((p:any) => ctx.lineTo(p.x, p.y));
+        ctx.lineTo(pts[pts.length - 1].x, PAD.top + ph);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      pts.forEach((p:any, i:any) =>
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y),
+      );
+      ctx.stroke();
+
+      // Dots
+      pts.forEach((p:any, i:any) => {
+        if (i % Math.max(1, Math.floor(pts.length / 8)) === 0) {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // X labels (sparse)
+      const step = Math.max(1, Math.floor(data.length / 6));
+      ctx.fillStyle = C.muted;
+      ctx.font = "8px monospace";
+      ctx.textAlign = "center";
+      data.forEach((d: any, i: number) => {
+        if (i % step === 0)
+          ctx.fillText(
+            String(d.x ?? "").slice(0, 10),
+            pts[i].x,
+            PAD.top + ph + 14,
+          );
+      });
+    }
+
+    if (chart.type === "scatter") {
+      const xs = data.map((d: any) => Number(d.x));
+      const ys = data.map((d: any) => Number(d.y));
+      const maxX = Math.max(...xs, 1),
+        minX = Math.min(...xs);
+      const maxY = Math.max(...ys, 1),
+        minY = Math.min(...ys);
+      const rx = maxX - minX || 1,
+        ry = maxY - minY || 1;
+
+      ctx.fillStyle = C.muted;
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const v = minY + (ry / 4) * (4 - i);
+        ctx.fillText(v.toFixed(1), PAD.left - 6, PAD.top + (ph / 4) * i + 3);
+      }
+
+      data.forEach((d: any, i: number) => {
+        const cx = PAD.left + ((Number(d.x) - minX) / rx) * pw;
+        const cy = PAD.top + ((maxY - Number(d.y)) / ry) * ph;
+        ctx.fillStyle = PALETTE[i % PALETTE.length];
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    if (chart.type === "pie" || chart.type === "donut") {
+      const total =
+        data.reduce((s: number, d: any) => s + (d.value || 0), 0) || 1;
+      const cx = W / 2,
+        cy = H / 2;
+      const outerR = Math.min(pw, ph) / 2 - 10;
+      const innerR = chart.type === "donut" ? outerR * 0.5 : 0;
+      let angle = -Math.PI / 2;
+
+      data.forEach((d: any, i: number) => {
+        const slice = (d.value / total) * Math.PI * 2;
+        const c2 = d.color || PALETTE[i % PALETTE.length];
+        ctx.fillStyle = c2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, outerR, angle, angle + slice);
+        ctx.closePath();
+        ctx.fill();
+
+        // Slice label
+        const midA = angle + slice / 2;
+        const lx = cx + Math.cos(midA) * (outerR * 0.7);
+        const ly = cy + Math.sin(midA) * (outerR * 0.7);
+        const pct = ((d.value / total) * 100).toFixed(0);
+        if (parseInt(pct) >= 5) {
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 9px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(`${pct}%`, lx, ly);
+        }
+        angle += slice;
+      });
+
+      if (chart.type === "donut") {
+        ctx.fillStyle = "#07071a";
+        ctx.beginPath();
+        ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = C.text;
+        ctx.font = "bold 14px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(String(total), cx, cy + 5);
+      }
+
+      // Legend
+      const lx0 = 10;
+      data.slice(0, 6).forEach((d: any, i: number) => {
+        const ly0 =
+          H -
+          14 -
+          (data.length <= 3 ? (data.length - 1 - i) * 14 : (5 - i) * 12);
+        const c2 = d.color || PALETTE[i % PALETTE.length];
+        ctx.fillStyle = c2;
+        ctx.fillRect(lx0, ly0 - 7, 8, 8);
+        ctx.fillStyle = C.muted;
+        ctx.font = "8px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(String(d.label ?? "").slice(0, 16), lx0 + 11, ly0);
+      });
+    }
+  }, [chart]);
+
+  return (
+    <div
+      style={{
+        background: C.bg1,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
+        padding: "1rem",
+        marginBottom: "0.875rem",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "0.72rem",
+          fontWeight: 600,
+          color: C.text,
+          marginBottom: "0.625rem",
+        }}
+      >
+        {chart.title}
+      </div>
+      <canvas
+        ref={canvasRef}
+        width={W}
+        height={H}
+        style={{ width: "100%", borderRadius: 6, display: "block" }}
+      />
+    </div>
+  );
+}
+
+// ── Overview tab ──────────────────────────────────────────────────────────
+function OverviewTab({ analysis, siteType, meta, enriched }: any) {
   const site = getSiteConfig(siteType);
   const pred = analysis.prediction ?? {};
   const pct = parseInt(pred.confidence) || 70;
-  const signalColor = getSignalColor(pred.result ?? "");
+  const sc = signalColor(pred.result ?? "");
+  const kms = analysis.keyMetrics ?? [];
 
   return (
     <div>
-      {/* Executive Summary */}
+      {/* Summary */}
       <GlassCard>
         <SectionTitle>Executive Summary</SectionTitle>
         <p
           style={{
             fontSize: "0.875rem",
-            color: "#cbd5e1",
-            lineHeight: 1.75,
+            color: C.text,
+            lineHeight: 1.8,
             margin: 0,
           }}
         >
@@ -222,70 +495,67 @@ function OverviewTab({
         </p>
       </GlassCard>
 
-      {/* KPI Row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "0.625rem",
-          marginBottom: "0.875rem",
-        }}
-      >
-        {[
-          { label: "Records", value: String(meta?.totalRecords ?? "—") },
-          { label: "Data Size", value: meta?.dataSize ?? "—" },
-          {
-            label: "Source",
-            value: siteType.includes("finance")
-              ? "Alpha Vantage"
-              : siteType === "science"
-                ? "NASA APIs"
-                : "HN Firebase",
-          },
-          {
-            label: "Fetched",
-            value: meta?.scrapedAt
-              ? new Date(meta.scrapedAt).toLocaleTimeString()
-              : "—",
-          },
-        ].map(({ label, value }) => (
-          <div
-            key={label}
-            style={{
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: "10px",
-              padding: "1rem",
-              textAlign: "center",
-            }}
-          >
+      {/* Key metrics */}
+      {kms.length > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))",
+            gap: "0.625rem",
+            marginBottom: "0.875rem",
+          }}
+        >
+          {kms.map((km: any, i: number) => (
             <div
+              key={i}
               style={{
-                fontSize: "clamp(0.875rem,2vw,1.1rem)",
-                fontWeight: 600,
-                color: site.color,
-                fontFamily: "monospace",
+                background: C.bg2,
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
+                padding: "0.875rem",
+                textAlign: "center",
               }}
             >
-              {value}
+              <div
+                style={{
+                  fontSize: "clamp(0.85rem,2vw,1.15rem)",
+                  fontWeight: 700,
+                  color: PALETTE[i % PALETTE.length],
+                  fontFamily: "monospace",
+                }}
+              >
+                {km.value}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.6rem",
+                  color: C.muted,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  marginTop: "0.2rem",
+                }}
+              >
+                {km.label}
+              </div>
+              {km.context && (
+                <div
+                  style={{
+                    fontSize: "0.62rem",
+                    color: C.dim,
+                    marginTop: "0.25rem",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {km.context}
+                </div>
+              )}
             </div>
-            <div
-              style={{
-                fontSize: "0.6rem",
-                color: "#475569",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                marginTop: "0.25rem",
-              }}
-            >
-              {label}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* Verdict + Confidence */}
-      <GlassCard style={{ borderColor: `${signalColor}30` }}>
+      {/* Verdict */}
+      <GlassCard style={{ borderColor: `${sc}30` }}>
         <SectionTitle>AI Verdict</SectionTitle>
         <div
           style={{
@@ -298,22 +568,22 @@ function OverviewTab({
         >
           <div
             style={{
-              fontSize: "clamp(1.25rem,3vw,1.75rem)",
-              fontWeight: 700,
-              color: signalColor,
+              fontSize: "clamp(1.1rem,3vw,1.6rem)",
+              fontWeight: 800,
+              color: sc,
               fontFamily: "monospace",
             }}
           >
             {pred.result ?? "—"}
           </div>
-          <Badge text={`${pct}% confidence`} color={signalColor} />
+          <Badge text={`${pct}% confidence`} color={sc} />
         </div>
-        <ConfidenceBar pct={pct} color={signalColor} />
+        <ConfBar pct={pct} color={sc} />
         <p
           style={{
             fontSize: "0.8rem",
-            color: "#94a3b8",
-            lineHeight: 1.7,
+            color: C.slate,
+            lineHeight: 1.75,
             marginTop: "0.875rem",
             marginBottom: 0,
           }}
@@ -322,24 +592,39 @@ function OverviewTab({
         </p>
       </GlassCard>
 
-      {/* Finance Deep: Key Metrics Hero */}
-      {siteType === "finance_deep" && analysis._records && (
-        <FinanceHero records={analysis._records} enriched={enriched} />
-      )}
-
-      {/* Finance Watchlist: Mini cards */}
-      {siteType === "finance_watchlist" && enriched?.watchlist && (
-        <WatchlistOverview watchlist={enriched.watchlist} />
-      )}
-
-      {/* Science: Hazard Alert */}
-      {siteType === "science" && enriched?.asteroids && (
-        <AsteroidAlert asteroids={enriched.asteroids} />
-      )}
-
-      {/* HackerNews: Top story */}
-      {siteType === "news" && analysis._records?.[0] && (
-        <TopStoryCard record={analysis._records[0]} />
+      {/* Patterns */}
+      {(analysis.patterns ?? []).length > 0 && (
+        <GlassCard>
+          <SectionTitle>Detected Patterns</SectionTitle>
+          {analysis.patterns.map((p: any, i: number) => (
+            <div
+              key={i}
+              style={{
+                paddingBottom: "0.625rem",
+                marginBottom: "0.625rem",
+                borderBottom:
+                  i < analysis.patterns.length - 1
+                    ? `1px solid ${C.border}`
+                    : "none",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.8rem",
+                  color: C.text,
+                  fontWeight: 500,
+                  marginBottom: "0.2rem",
+                }}
+              >
+                {p.pattern}
+              </div>
+              <div style={{ fontSize: "0.7rem", color: C.muted }}>
+                {p.frequency} ·{" "}
+                <span style={{ color: C.slate }}>{p.significance}</span>
+              </div>
+            </div>
+          ))}
+        </GlassCard>
       )}
 
       {/* Best use case */}
@@ -349,8 +634,8 @@ function OverviewTab({
           <p
             style={{
               fontSize: "0.8rem",
-              color: "#94a3b8",
-              lineHeight: 1.7,
+              color: C.slate,
+              lineHeight: 1.75,
               margin: 0,
             }}
           >
@@ -362,1157 +647,671 @@ function OverviewTab({
   );
 }
 
-function FinanceHero({
-  records,
-  enriched,
-}: {
-  records: any[];
-  enriched?: any;
-}) {
-  const find = (metric: string) =>
-    records.find((r: any) => r.Metric === metric)?.Value ?? "—";
-  const price = find("Current Price");
-  const change = find("Change");
-  const signal = find("Overall Signal");
-  const rsi = find("RSI (14)");
-  const trend = find("Trend (MA50 vs MA200)");
-  const mktCap = find("Market Cap");
-  const pe = find("P/E Ratio");
-  const sentiment = enriched?.sentiment;
-
-  const isUp =
-    change.includes("+") || (!change.includes("-") && parseFloat(change) > 0);
+// ── Data tab ──────────────────────────────────────────────────────────────
+function DataTab({ records, siteType, enriched }: any) {
+  const [view, setView] = useState<"cards" | "table">("cards");
+  if (!records.length)
+    return (
+      <div style={{ textAlign: "center", color: C.muted, padding: "2rem" }}>
+        No records
+      </div>
+    );
+  const keys = Object.keys(records[0]);
 
   return (
-    <GlassCard>
-      <SectionTitle>Price & Signal Dashboard</SectionTitle>
+    <div>
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "0.875rem",
-          marginBottom: "0.875rem",
-        }}
+        style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem" }}
       >
-        {/* Price */}
-        <div
+        {(["cards", "table"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            style={{
+              padding: "0.3rem 0.75rem",
+              borderRadius: 6,
+              fontSize: "0.68rem",
+              border: `1px solid ${view === v ? C.cyan : C.border}`,
+              background: view === v ? `${C.cyan}15` : "transparent",
+              color: view === v ? C.cyan : C.muted,
+              cursor: "pointer",
+            }}
+          >
+            {v === "cards" ? "Cards" : "Table"}
+          </button>
+        ))}
+        <span
           style={{
-            background: "rgba(0,245,200,0.05)",
-            border: "1px solid rgba(0,245,200,0.15)",
-            borderRadius: "10px",
-            padding: "1rem",
+            marginLeft: "auto",
+            fontSize: "0.65rem",
+            color: C.dim,
+            alignSelf: "center",
           }}
         >
-          <div
-            style={{
-              fontSize: "0.6rem",
-              color: "#475569",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-            }}
-          >
-            Current Price
-          </div>
-          <div
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: 700,
-              color: "#f0eff8",
-              fontFamily: "monospace",
-              margin: "0.25rem 0",
-            }}
-          >
-            {price}
-          </div>
-          <div
-            style={{
-              fontSize: "0.8rem",
-              color: isUp ? "#00f5c8" : "#ef4444",
-              fontFamily: "monospace",
-            }}
-          >
-            {change}
-          </div>
-        </div>
-        {/* Signal */}
-        <div
-          style={{
-            background: `${getSignalColor(signal)}08`,
-            border: `1px solid ${getSignalColor(signal)}20`,
-            borderRadius: "10px",
-            padding: "1rem",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "0.6rem",
-              color: "#475569",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-            }}
-          >
-            Overall Signal
-          </div>
-          <div
-            style={{
-              fontSize: "0.95rem",
-              fontWeight: 700,
-              color: getSignalColor(signal),
-              margin: "0.5rem 0",
-            }}
-          >
-            {signal}
-          </div>
-          <div style={{ fontSize: "0.7rem", color: "#64748b" }}>{trend}</div>
-        </div>
+          {records.length} records
+        </span>
       </div>
-      {/* Metric row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4,1fr)",
-          gap: "0.5rem",
-        }}
-      >
-        {[
-          { label: "RSI 14", value: rsi.split("—")[0].trim() },
-          { label: "Market Cap", value: mktCap },
-          { label: "P/E Ratio", value: pe },
-          {
-            label: "News",
-            value: sentiment
-              ? `${sentiment.bullish}🟢 ${sentiment.bearish}🔴`
-              : "—",
-          },
-        ].map(({ label, value }) => (
-          <div
-            key={label}
-            style={{
-              textAlign: "center",
-              padding: "0.625rem",
-              background: "rgba(255,255,255,0.02)",
-              borderRadius: "8px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "0.75rem",
-                fontFamily: "monospace",
-                color: "#e2e8f0",
-                fontWeight: 600,
-              }}
-            >
-              {value}
-            </div>
-            <div
-              style={{
-                fontSize: "0.58rem",
-                color: "#475569",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                marginTop: "0.2rem",
-              }}
-            >
-              {label}
-            </div>
-          </div>
-        ))}
-      </div>
-    </GlassCard>
-  );
-}
 
-function WatchlistOverview({ watchlist }: { watchlist: any[] }) {
-  return (
-    <GlassCard>
-      <SectionTitle>Live Watchlist</SectionTitle>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {watchlist.map((s: any, i: number) => {
-          const isUp = s.direction === "▲";
-          return (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0.625rem 0.75rem",
-                background: "rgba(255,255,255,0.02)",
-                borderRadius: "8px",
-                border: `1px solid ${isUp ? "rgba(0,245,200,0.1)" : "rgba(239,68,68,0.1)"}`,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.625rem",
-                }}
-              >
-                <span style={{ fontSize: "1rem" }}>{s.flag}</span>
-                <div>
-                  <div
+      {view === "table" ? (
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "0.72rem",
+            }}
+          >
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    padding: "0.5rem 0.625rem",
+                    textAlign: "left",
+                    borderBottom: `1px solid ${C.border}`,
+                    color: C.dim,
+                    fontSize: "0.58rem",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  #
+                </th>
+                {keys.map((k) => (
+                  <th
+                    key={k}
                     style={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#e2e8f0",
-                      fontFamily: "monospace",
+                      padding: "0.5rem 0.625rem",
+                      textAlign: "left",
+                      borderBottom: `1px solid ${C.border}`,
+                      color: C.dim,
+                      fontSize: "0.58rem",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    {s.symbol}
-                  </div>
-                  <div style={{ fontSize: "0.65rem", color: "#64748b" }}>
-                    {s.name}
-                  </div>
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div
-                  style={{
-                    fontSize: "0.875rem",
-                    fontFamily: "monospace",
-                    color: "#f0eff8",
-                  }}
-                >
-                  {s.price}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.7rem",
-                    color: isUp ? "#00f5c8" : "#ef4444",
-                  }}
-                >
-                  {s.direction} {s.changePercent}%
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </GlassCard>
-  );
-}
-
-function AsteroidAlert({ asteroids }: { asteroids: any[] }) {
-  const hazardous = asteroids.filter((a: any) =>
-    a.hazardous?.includes("HAZARDOUS"),
-  );
-  if (!hazardous.length) return null;
-  return (
-    <div
-      style={{
-        background: "rgba(239,68,68,0.08)",
-        border: "1px solid rgba(239,68,68,0.25)",
-        borderRadius: "12px",
-        padding: "1rem 1.25rem",
-        marginBottom: "0.875rem",
-        display: "flex",
-        gap: "1rem",
-        alignItems: "flex-start",
-      }}
-    >
-      <span style={{ fontSize: "1.5rem" }}>☄️</span>
-      <div>
-        <div
-          style={{
-            fontSize: "0.8rem",
-            fontWeight: 600,
-            color: "#ef4444",
-            marginBottom: "0.25rem",
-          }}
-        >
-          {hazardous.length} Potentially Hazardous Asteroid
-          {hazardous.length > 1 ? "s" : ""} — Today
-        </div>
-        <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
-          {hazardous.map((h: any) => h.name).join(" · ")}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TopStoryCard({ record }: { record: any }) {
-  return (
-    <GlassCard style={{ borderColor: "rgba(245,158,11,0.2)" }}>
-      <SectionTitle>Top Story</SectionTitle>
-      <a
-        href={record.URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          fontSize: "0.95rem",
-          fontWeight: 600,
-          color: "#f0eff8",
-          textDecoration: "none",
-          lineHeight: 1.5,
-          display: "block",
-          marginBottom: "0.5rem",
-        }}
-      >
-        {record.Title}
-      </a>
-      <div
-        style={{
-          display: "flex",
-          gap: "0.75rem",
-          fontSize: "0.7rem",
-          color: "#64748b",
-        }}
-      >
-        <span style={{ color: "#f59e0b" }}>{record.Score}</span>
-        <span>{record.Domain}</span>
-        <span>{record.Author}</span>
-        <span>{record.Comments} comments</span>
-      </div>
-    </GlassCard>
-  );
-}
-
-/* ── Data Tab ─────────────────────────────────────────────────────────────── */
-function DataTab({
-  records,
-  siteType,
-  enriched,
-}: {
-  records: any[];
-  siteType: string;
-  enriched?: any;
-}) {
-  const site = getSiteConfig(siteType);
-
-  /* ── Finance Deep — grouped by Category ── */
-  if (siteType === "finance_deep" && records[0]?.Category) {
-    const groups: Record<string, any[]> = {};
-    for (const r of records) {
-      const cat = r.Category ?? "Other";
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(r);
-    }
-    return (
-      <div>
-        {Object.entries(groups).map(([cat, rows]) => (
-          <GlassCard key={cat}>
-            <SectionTitle>{cat}</SectionTitle>
-            <div>
-              {rows.map((row, i) => (
-                <div
+                    {k}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((r: any, i: number) => (
+                <tr
                   key={i}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    padding: "0.5rem 0",
-                    borderBottom:
-                      i < rows.length - 1
-                        ? "1px solid rgba(255,255,255,0.04)"
-                        : "none",
-                    gap: "1rem",
-                  }}
+                  style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}
                 >
-                  <span
+                  <td
                     style={{
-                      fontSize: "0.75rem",
-                      color: "#64748b",
-                      flex: "0 0 auto",
-                      maxWidth: "45%",
-                    }}
-                  >
-                    {row.Metric}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "0.78rem",
-                      color: "#e2e8f0",
+                      padding: "0.45rem 0.625rem",
+                      color: C.dim,
                       fontFamily: "monospace",
-                      textAlign: "right",
-                      wordBreak: "break-word",
+                      fontSize: "0.65rem",
                     }}
                   >
-                    {row.Value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-        ))}
-      </div>
-    );
-  }
-
-  /* ── Finance Watchlist ── */
-  if (
-    (siteType === "finance_watchlist" || siteType === "finance_stocks") &&
-    records[0]?.Symbol
-  ) {
-    return (
-      <div>
-        {records.map((r, i) => {
-          const isUp = String(r.Change ?? "").startsWith("▲");
-          return (
-            <div
-              key={i}
-              style={{
-                background: "rgba(255,255,255,0.02)",
-                border: `1px solid ${isUp ? "rgba(0,245,200,0.12)" : "rgba(239,68,68,0.12)"}`,
-                borderRadius: "12px",
-                padding: "1rem 1.25rem",
-                marginBottom: "0.625rem",
-                display: "grid",
-                gridTemplateColumns: "auto 1fr auto",
-                gap: "1rem",
-                alignItems: "center",
-              }}
-            >
-              <span style={{ fontSize: "1.5rem" }}>{r.Flag}</span>
-              <div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "0.9rem",
-                      fontWeight: 700,
-                      color: "#f0eff8",
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {r.Symbol}
-                  </span>
-                  <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
-                    {r.Company}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.7rem",
-                    color: "#475569",
-                    marginTop: "0.2rem",
-                  }}
-                >
-                  Vol: {r.Volume} · H:{r["Day High"]} L:{r["Day Low"]}
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div
-                  style={{
-                    fontSize: "1rem",
-                    fontFamily: "monospace",
-                    color: "#f0eff8",
-                  }}
-                >
-                  {r.Price}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: isUp ? "#00f5c8" : "#ef4444",
-                  }}
-                >
-                  {r.Change} ({r["Change %"]})
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  /* ── Science / NASA ── */
-  if (siteType === "science_space" || siteType === "science") {
-    const apod = records.filter(
-      (r) => r.Type?.includes("APOD") || r["Data Type"]?.includes("APOD"),
-    );
-    const asteroids = records.filter(
-      (r) => r.Type?.includes("NEO") || r["Data Type"]?.includes("Near Earth"),
-    );
-    const events = records.filter(
-      (r) =>
-        r.Type?.includes("Earth Event") ||
-        r["Data Type"]?.includes("Earth Event"),
-    );
-    const images = enriched?.nasaImages ?? [];
-
-    return (
-      <div>
-        {images.length > 0 && (
-          <GlassCard>
-            <SectionTitle>NASA Image Library</SectionTitle>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3,1fr)",
-                gap: "0.625rem",
-              }}
-            >
-              {images.slice(0, 6).map((img: any, i: number) => (
-                <div
-                  key={i}
-                  style={{
-                    borderRadius: "8px",
-                    overflow: "hidden",
-                    background: "#0d0d1f",
-                  }}
-                >
-                  <img
-                    src={img.image_url}
-                    alt={img.title}
-                    style={{
-                      width: "100%",
-                      height: "100px",
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                    onError={(e) => {
-                      (
-                        e.target as HTMLImageElement
-                      ).parentElement!.style.display = "none";
-                    }}
-                  />
-                  <div
-                    style={{
-                      padding: "0.375rem 0.5rem",
-                      fontSize: "0.62rem",
-                      color: "#64748b",
-                    }}
-                  >
-                    {img.title}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-        )}
-        {apod.length > 0 && (
-          <GlassCard>
-            <SectionTitle>Astronomy Picture of the Day</SectionTitle>
-            {apod.map((a, i) => (
-              <div
-                key={i}
-                style={{
-                  paddingBottom: i < apod.length - 1 ? "1rem" : 0,
-                  marginBottom: i < apod.length - 1 ? "1rem" : 0,
-                  borderBottom:
-                    i < apod.length - 1
-                      ? "1px solid rgba(255,255,255,0.05)"
-                      : "none",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.75rem",
-                    alignItems: "baseline",
-                    marginBottom: "0.375rem",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "0.85rem",
-                      fontWeight: 600,
-                      color: "#e2e8f0",
-                    }}
-                  >
-                    {a.Title}
-                  </span>
-                  <span style={{ fontSize: "0.65rem", color: "#475569" }}>
-                    {a.Date}
-                  </span>
-                </div>
-                <p
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "#64748b",
-                    lineHeight: 1.7,
-                    margin: 0,
-                  }}
-                >
-                  {String(a.Summary ?? "").slice(0, 250)}…
-                </p>
-              </div>
-            ))}
-          </GlassCard>
-        )}
-        {asteroids.length > 0 && (
-          <GlassCard>
-            <SectionTitle>Near Earth Objects — Today</SectionTitle>
-            {asteroids.map((a, i) => {
-              const isHazardous =
-                (a.Hazardous || a["Hazard Status"] || "").includes(
-                  "HAZARDOUS",
-                ) || (a.Hazardous || a["Hazard Status"] || "").includes("YES");
-              return (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    padding: "0.625rem 0",
-                    borderBottom:
-                      i < asteroids.length - 1
-                        ? "1px solid rgba(255,255,255,0.04)"
-                        : "none",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: isHazardous ? "#ef4444" : "#e2e8f0",
-                      flex: "1 0 auto",
-                      minWidth: "140px",
-                    }}
-                  >
-                    {a.Name}
-                  </span>
-                  <Badge
-                    text={a.Hazardous || a["Hazard Status"] || "Safe"}
-                    color={isHazardous ? "#ef4444" : "#00f5c8"}
-                  />
-                  <Badge
-                    text={a.Diameter || a["Diameter Min"] || ""}
-                    color="#64748b"
-                  />
-                  <Badge
-                    text={`Miss: ${a["Miss Distance"] || ""}`}
-                    color="#64748b"
-                  />
-                  <Badge text={a.Velocity || ""} color="#64748b" />
-                </div>
-              );
-            })}
-          </GlassCard>
-        )}
-        {events.length > 0 && (
-          <GlassCard>
-            <SectionTitle>Active Earth Events (EONET)</SectionTitle>
-            {events.map((e, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                  padding: "0.5rem 0",
-                  borderBottom:
-                    i < events.length - 1
-                      ? "1px solid rgba(255,255,255,0.04)"
-                      : "none",
-                }}
-              >
-                <Badge text={e.Category || ""} color="#a78bfa" />
-                <span
-                  style={{ fontSize: "0.78rem", color: "#e2e8f0", flex: 1 }}
-                >
-                  {e.Title}
-                </span>
-                <span style={{ fontSize: "0.65rem", color: "#475569" }}>
-                  {e.Date}
-                </span>
-              </div>
-            ))}
-          </GlassCard>
-        )}
-      </div>
-    );
-  }
-
-  /* ── Academic Research ── */
-  if (siteType === "academic_research") {
-    const bySource: Record<string, any[]> = {};
-    for (const r of records) {
-      const src = r.Source || "Other";
-      if (!bySource[src]) bySource[src] = [];
-      bySource[src].push(r);
-    }
-    return (
-      <div>
-        {Object.entries(bySource).map(([src, papers]) => (
-          <GlassCard key={src}>
-            <SectionTitle>{src}</SectionTitle>
-            {papers.map((p, i) => (
-              <div
-                key={i}
-                style={{
-                  paddingBottom: "0.875rem",
-                  marginBottom: "0.875rem",
-                  borderBottom:
-                    i < papers.length - 1
-                      ? "1px solid rgba(255,255,255,0.05)"
-                      : "none",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "0.82rem",
-                    fontWeight: 600,
-                    color: "#e2e8f0",
-                    marginBottom: "0.25rem",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {p.Title}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    flexWrap: "wrap",
-                    marginBottom: "0.375rem",
-                  }}
-                >
-                  {p.Year && <Badge text={p.Year} color="#64748b" />}
-                  {p.Citations && p.Citations !== "Preprint" && (
-                    <Badge text={`${p.Citations} citations`} color="#a78bfa" />
-                  )}
-                  {p.Venue && (
-                    <Badge text={p.Venue.slice(0, 30)} color="#64748b" />
-                  )}
-                </div>
-                <p
-                  style={{
-                    fontSize: "0.72rem",
-                    color: "#64748b",
-                    lineHeight: 1.6,
-                    margin: 0,
-                  }}
-                >
-                  {p.Authors?.slice(0, 80)}
-                </p>
-                {p.Abstract && (
-                  <p
-                    style={{
-                      fontSize: "0.72rem",
-                      color: "#475569",
-                      lineHeight: 1.6,
-                      margin: "0.375rem 0 0",
-                    }}
-                  >
-                    {p.Abstract.slice(0, 200)}…
-                  </p>
-                )}
-              </div>
-            ))}
-          </GlassCard>
-        ))}
-      </div>
-    );
-  }
-
-  /* ── Health / Medical ── */
-  if (siteType === "health_medical" || siteType === "health_medicine") {
-    return (
-      <div>
-        {records.map((r, i) => (
-          <div
-            key={i}
-            style={{
-              background: "rgba(255,255,255,0.015)",
-              border: "1px solid rgba(52,211,153,0.1)",
-              borderRadius: "10px",
-              padding: "0.875rem 1rem",
-              marginBottom: "0.5rem",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: "0.5rem",
-                marginBottom: "0.375rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <Badge text={r.Source || "Medical"} color="#34d399" />
-              {r.Date && <Badge text={r.Date} color="#64748b" />}
-            </div>
-            <div
-              style={{
-                fontSize: "0.82rem",
-                color: "#e2e8f0",
-                fontWeight: 500,
-                marginBottom: "0.25rem",
-                lineHeight: 1.4,
-              }}
-            >
-              {r.Title}
-            </div>
-            {r.Authors && (
-              <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
-                {r.Authors.slice(0, 80)}
-              </div>
-            )}
-            {r.Journal && (
-              <div
-                style={{
-                  fontSize: "0.68rem",
-                  color: "#475569",
-                  marginTop: "0.2rem",
-                }}
-              >
-                {r.Journal}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  /* ── E-commerce ── */
-  if (siteType === "ecommerce_product") {
-    return (
-      <div>
-        {records.map((r, i) => (
-          <div
-            key={i}
-            style={{
-              background: "rgba(255,255,255,0.015)",
-              border: "1px solid rgba(251,146,60,0.12)",
-              borderRadius: "10px",
-              padding: "0.875rem 1rem",
-              marginBottom: "0.5rem",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: "1rem",
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: "0.82rem",
-                    color: "#e2e8f0",
-                    fontWeight: 500,
-                    marginBottom: "0.375rem",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {r.Name || r["Product Info"] || `Product ${i + 1}`}
-                </div>
-                {r.Description && (
-                  <div
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#64748b",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {r.Description.slice(0, 120)}
-                  </div>
-                )}
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.375rem",
-                    marginTop: "0.375rem",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {r.Rating && (
-                    <Badge text={`⭐ ${r.Rating}`} color="#f59e0b" />
-                  )}
-                  {r.Reviews && (
-                    <Badge text={`${r.Reviews} reviews`} color="#64748b" />
-                  )}
-                  {r.Discount && <Badge text={r.Discount} color="#00f5c8" />}
-                </div>
-              </div>
-              {r.Price && (
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div
-                    style={{
-                      fontSize: "1rem",
-                      fontFamily: "monospace",
-                      fontWeight: 700,
-                      color: "#fb923c",
-                    }}
-                  >
-                    {r.Price}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  /* ── HackerNews / Tech news ── */
-  if (
-    (siteType === "news" ||
-      siteType === "social_hn" ||
-      siteType === "technology") &&
-    records[0]?.Title &&
-    records[0]?.Score !== undefined
-  ) {
-    return (
-      <div>
-        {records.map((r, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              gap: "1rem",
-              alignItems: "flex-start",
-              padding: "0.875rem 1rem",
-              background: "rgba(255,255,255,0.015)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: "10px",
-              marginBottom: "0.5rem",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "0.7rem",
-                color: "#334155",
-                fontFamily: "monospace",
-                fontWeight: 700,
-                paddingTop: "2px",
-                minWidth: "24px",
-              }}
-            >
-              {String(i + 1).padStart(2, "0")}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <a
-                href={r.URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  fontSize: "0.85rem",
-                  fontWeight: 500,
-                  color: "#e2e8f0",
-                  textDecoration: "none",
-                  lineHeight: 1.5,
-                  display: "block",
-                  marginBottom: "0.375rem",
-                }}
-              >
-                {r.Title}
-              </a>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  flexWrap: "wrap",
-                  fontSize: "0.65rem",
-                  color: "#475569",
-                }}
-              >
-                <span style={{ color: "#f59e0b" }}>{r.Score}</span>
-                {r.Domain && (
-                  <>
-                    <span>·</span>
-                    <span>{r.Domain}</span>
-                  </>
-                )}
-                {r.Author && (
-                  <>
-                    <span>·</span>
-                    <span>{r.Author}</span>
-                  </>
-                )}
-                {r.Comments && (
-                  <>
-                    <span>·</span>
-                    <span>{r.Comments} comments</span>
-                  </>
-                )}
-                {r.Sentiment && (
-                  <>
-                    <span>·</span>
-                    <span
+                    {i + 1}
+                  </td>
+                  {keys.map((k) => (
+                    <td
+                      key={k}
                       style={{
-                        color: r.Sentiment.includes("Positive")
-                          ? "#00f5c8"
-                          : r.Sentiment.includes("Negative")
-                            ? "#ef4444"
-                            : "#f59e0b",
+                        padding: "0.45rem 0.625rem",
+                        color: C.slate,
+                        maxWidth: 220,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
                       }}
+                      title={String(r[k] ?? "")}
                     >
-                      {r.Sentiment}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  /* ── Reddit / General news — cards with sentiment ── */
-  if (records[0]?.Sentiment || records[0]?.Title) {
-    return (
-      <div>
-        {records.map((r, i) => {
-          const sentColor = (r.Sentiment || "").includes("Positive")
-            ? "#00f5c8"
-            : (r.Sentiment || "").includes("Negative")
-              ? "#ef4444"
-              : "#f59e0b";
-          return (
+                      {String(r[k] ?? "—")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div>
+          {records.map((r: any, i: number) => (
             <div
               key={i}
               style={{
-                background: "rgba(255,255,255,0.015)",
-                border: `1px solid ${r.Sentiment ? sentColor + "20" : "rgba(255,255,255,0.06)"}`,
-                borderRadius: "10px",
+                background: C.bg1,
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
                 padding: "0.875rem 1rem",
                 marginBottom: "0.5rem",
               }}
             >
               <div
                 style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  marginBottom: "0.375rem",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                }}
-              >
-                {r.Source && (
-                  <Badge text={r.Source.slice(0, 25)} color="#64748b" />
-                )}
-                {r.Sentiment && <Badge text={r.Sentiment} color={sentColor} />}
-                {r.Date && (
-                  <span style={{ fontSize: "0.62rem", color: "#475569" }}>
-                    {r.Date}
-                  </span>
-                )}
-              </div>
-              <a
-                href={r.URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  fontSize: "0.82rem",
-                  fontWeight: 500,
-                  color: "#e2e8f0",
-                  textDecoration: "none",
-                  lineHeight: 1.5,
-                  display: "block",
-                }}
-              >
-                {r.Title || r.Content?.slice(0, 120) || "—"}
-              </a>
-              {r.Content && r.Content !== r.Title && (
-                <p
-                  style={{
-                    fontSize: "0.72rem",
-                    color: "#64748b",
-                    lineHeight: 1.6,
-                    margin: "0.375rem 0 0",
-                  }}
-                >
-                  {r.Content.slice(0, 160)}…
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  /* ── Generic table fallback ── */
-  if (!records.length)
-    return (
-      <div style={{ textAlign: "center", color: "#475569", padding: "2rem" }}>
-        No records
-      </div>
-    );
-  const keys = Object.keys(records[0]);
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "0.75rem",
-        }}
-      >
-        <thead>
-          <tr>
-            {keys.map((k) => (
-              <th
-                key={k}
-                style={{
-                  padding: "0.625rem 0.75rem",
-                  textAlign: "left",
-                  borderBottom: "1px solid rgba(255,255,255,0.07)",
-                  color: "#475569",
                   fontSize: "0.6rem",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
+                  color: C.dim,
+                  fontFamily: "monospace",
+                  marginBottom: "0.5rem",
                 }}
               >
-                {k}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((r, i) => (
-            <tr
-              key={i}
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
-            >
-              {keys.map((k) => (
-                <td
-                  key={k}
-                  style={{
-                    padding: "0.5rem 0.75rem",
-                    color: "#94a3b8",
-                    maxWidth: "200px",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {String(r[k] ?? "—").slice(0, 80)}
-                </td>
-              ))}
-            </tr>
+                #{String(i + 1).padStart(2, "0")} ·{" "}
+                {r.Source || r.source || r.Category || ""}
+              </div>
+              {Object.entries(r)
+                .filter(([k]) => !["Source", "Category", "source"].includes(k))
+                .map(([k, v]) => (
+                  <div
+                    key={k}
+                    style={{
+                      display: "flex",
+                      gap: "0.75rem",
+                      padding: "0.3rem 0",
+                      borderBottom: `1px solid rgba(255,255,255,0.03)`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.68rem",
+                        color: C.dim,
+                        minWidth: 100,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {k}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        color: C.text,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {String(v ?? "—")}
+                    </span>
+                  </div>
+                ))}
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ── Insights Tab ─────────────────────────────────────────────────────────── */
-function InsightsTab({
-  analysis,
-  siteType,
-}: {
-  analysis: any;
-  siteType: string;
-}) {
-  const insights: {
-    insight: string;
-    significance: string;
-    category?: string;
-  }[] = analysis.insights ?? [];
-  const sigColor = (s: string) =>
-    s === "high" ? "#00f5c8" : s === "medium" ? "#f59e0b" : "#64748b";
+// ── Charts tab ────────────────────────────────────────────────────────────
+function ChartsTab({ analysis, records, enriched }: any) {
+  const charts: any[] = analysis.charts ?? [];
+
+  if (!charts.length) {
+    return (
+      <GlassCard>
+        <div style={{ textAlign: "center", padding: "2rem", color: C.muted }}>
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📊</div>
+          <div style={{ fontSize: "0.82rem", color: C.dim }}>
+            No chart data available for this dataset.
+          </div>
+          <div
+            style={{ fontSize: "0.72rem", color: C.dim, marginTop: "0.5rem" }}
+          >
+            Fetch more numeric data sources to enable charts.
+          </div>
+        </div>
+      </GlassCard>
+    );
+  }
 
   return (
     <div>
-      {/* Data Quality block */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.375rem",
+          marginBottom: "1rem",
+        }}
+      >
+        {charts.map((c: any, i: number) => (
+          <Badge
+            key={i}
+            text={c.title?.slice(0, 20) || c.type}
+            color={c.color || C.cyan}
+          />
+        ))}
+      </div>
+      {charts.map((chart: any, i: number) => (
+        <ChartCard key={i} chart={chart} />
+      ))}
+    </div>
+  );
+}
+
+// ── ML tab ────────────────────────────────────────────────────────────────
+function MLTab({ analysis, records, onDownloadClean }: any) {
+  const ml = analysis.mlReadiness;
+  if (!ml)
+    return (
+      <div style={{ textAlign: "center", color: C.muted, padding: "2rem" }}>
+        No ML readiness data available.
+      </div>
+    );
+
+  const scoreColor =
+    ml.readinessScore >= 70
+      ? C.green
+      : ml.readinessScore >= 40
+        ? C.gold
+        : C.red;
+  const circumference = 2 * Math.PI * 36;
+  const dash = (ml.readinessScore / 100) * circumference;
+
+  return (
+    <div>
+      {/* Readiness score */}
+      <GlassCard>
+        <SectionTitle>ML Readiness Score</SectionTitle>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "2rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              width: 90,
+              height: 90,
+              flexShrink: 0,
+            }}
+          >
+            <svg width={90} height={90} viewBox="0 0 90 90">
+              <circle
+                cx={45}
+                cy={45}
+                r={36}
+                fill="none"
+                stroke="rgba(255,255,255,0.06)"
+                strokeWidth={8}
+              />
+              <circle
+                cx={45}
+                cy={45}
+                r={36}
+                fill="none"
+                stroke={scoreColor}
+                strokeWidth={8}
+                strokeDasharray={`${dash} ${circumference}`}
+                strokeDashoffset={circumference * 0.25}
+                strokeLinecap="round"
+                style={{ transition: "stroke-dasharray 1s ease" }}
+              />
+            </svg>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "1.3rem",
+                  fontWeight: 800,
+                  color: scoreColor,
+                  fontFamily: "monospace",
+                  lineHeight: 1,
+                }}
+              >
+                {ml.readinessScore}
+              </span>
+              <span
+                style={{
+                  fontSize: "0.55rem",
+                  color: C.muted,
+                  letterSpacing: "0.1em",
+                }}
+              >
+                / 100
+              </span>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                fontSize: "0.82rem",
+                color: C.text,
+                fontWeight: 600,
+                marginBottom: "0.375rem",
+              }}
+            >
+              {ml.readinessScore >= 70
+                ? "✅ Ready for ML"
+                : ml.readinessScore >= 40
+                  ? "⚠️ Needs Cleaning"
+                  : "❌ Insufficient Data"}
+            </div>
+            <div
+              style={{ fontSize: "0.72rem", color: C.muted, lineHeight: 1.6 }}
+            >
+              {ml.totalRows} rows · {ml.totalCols} columns ·{" "}
+              {ml.numericCols.length} numeric · {ml.textCols.length} categorical
+            </div>
+            <div
+              style={{
+                marginTop: "0.5rem",
+                display: "flex",
+                gap: "0.375rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <Badge
+                text={`${ml.cleanCols.length} clean cols`}
+                color={C.green}
+              />
+              {ml.dirtyCols.length > 0 && (
+                <Badge
+                  text={`${ml.dirtyCols.length} dirty cols`}
+                  color={C.red}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* Column stats */}
+      {(ml.colStats ?? []).length > 0 && (
+        <GlassCard>
+          <SectionTitle>Numeric Column Statistics</SectionTitle>
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "0.72rem",
+              }}
+            >
+              <thead>
+                <tr>
+                  {["Column", "Min", "Max", "Mean", "Count"].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: "0.4rem 0.625rem",
+                        textAlign: "left",
+                        borderBottom: `1px solid ${C.border}`,
+                        color: C.dim,
+                        fontSize: "0.58rem",
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ml.colStats.map((s: any, i: number) => (
+                  <tr
+                    key={i}
+                    style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}
+                  >
+                    <td
+                      style={{
+                        padding: "0.4rem 0.625rem",
+                        color: C.cyan,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {s.col}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.4rem 0.625rem",
+                        color: C.text,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {s.min}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.4rem 0.625rem",
+                        color: C.text,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {s.max}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.4rem 0.625rem",
+                        color: C.text,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {s.mean}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.4rem 0.625rem",
+                        color: C.muted,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {s.count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Applicable tasks */}
+      <GlassCard>
+        <SectionTitle>Applicable ML Tasks</SectionTitle>
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+        >
+          {ml.applicableTasks.length > 0 ? (
+            ml.applicableTasks.map((t: string, i: number) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.625rem",
+                  padding: "0.625rem 0.75rem",
+                  background: C.bg2,
+                  borderRadius: 8,
+                }}
+              >
+                <span
+                  style={{
+                    color: PALETTE[i % PALETTE.length],
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  ▸
+                </span>
+                <span style={{ fontSize: "0.78rem", color: C.text }}>{t}</span>
+              </div>
+            ))
+          ) : (
+            <div style={{ fontSize: "0.75rem", color: C.muted }}>
+              No ML tasks applicable — need more numeric data.
+            </div>
+          )}
+        </div>
+      </GlassCard>
+
+      {/* Suggested target / features */}
+      {ml.suggestedTarget && (
+        <GlassCard>
+          <SectionTitle>Suggested Model Setup</SectionTitle>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "0.75rem",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: "0.6rem",
+                  color: C.muted,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  marginBottom: "0.3rem",
+                }}
+              >
+                Target Variable
+              </div>
+              <div
+                style={{
+                  fontSize: "0.82rem",
+                  color: C.cyan,
+                  fontFamily: "monospace",
+                  fontWeight: 600,
+                }}
+              >
+                {ml.suggestedTarget}
+              </div>
+            </div>
+            <div>
+              <div
+                style={{
+                  fontSize: "0.6rem",
+                  color: C.muted,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  marginBottom: "0.3rem",
+                }}
+              >
+                Feature Columns
+              </div>
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  color: C.text,
+                  fontFamily: "monospace",
+                  lineHeight: 1.6,
+                }}
+              >
+                {(ml.suggestedFeatures ?? []).join(", ") || "—"}
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Recommended models */}
+      {(ml.recommendedModels ?? []).length > 0 && (
+        <GlassCard>
+          <SectionTitle>Recommended Models</SectionTitle>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem" }}>
+            {ml.recommendedModels.map((m: string, i: number) => (
+              <Badge key={i} text={m} color={PALETTE[i % PALETTE.length]} />
+            ))}
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Cleaning steps */}
+      {(ml.cleaningSteps ?? []).length > 0 && (
+        <GlassCard>
+          <SectionTitle>Data Cleaning Checklist</SectionTitle>
+          {ml.cleaningSteps.map((step: string, i: number) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                gap: "0.625rem",
+                padding: "0.5rem 0",
+                borderBottom:
+                  i < ml.cleaningSteps.length - 1
+                    ? `1px solid ${C.border}`
+                    : "none",
+              }}
+            >
+              <span
+                style={{
+                  color: step.startsWith("⚠") ? C.gold : C.green,
+                  flexShrink: 0,
+                  marginTop: 1,
+                }}
+              >
+                {step.startsWith("⚠") ? "⚠" : "✓"}
+              </span>
+              <span style={{ fontSize: "0.75rem", color: C.slate }}>
+                {step.replace(/^[⚠✓]\s*/, "")}
+              </span>
+            </div>
+          ))}
+        </GlassCard>
+      )}
+
+      {/* ML suggestion from AI */}
+      {analysis.mlSuggestion && (
+        <GlassCard>
+          <SectionTitle>AI Model Recommendation</SectionTitle>
+          <p
+            style={{
+              fontSize: "0.8rem",
+              color: C.slate,
+              lineHeight: 1.75,
+              margin: 0,
+            }}
+          >
+            {analysis.mlSuggestion}
+          </p>
+        </GlassCard>
+      )}
+
+      {/* Download cleaned CSV */}
+      <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
+        <button
+          onClick={onDownloadClean}
+          style={{
+            padding: "0.75rem 2rem",
+            borderRadius: 10,
+            border: "none",
+            background: `linear-gradient(135deg,${C.cyan},#00c8d4)`,
+            color: "#04040a",
+            fontSize: "0.82rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            letterSpacing: "0.04em",
+          }}
+        >
+          ⬇ Download ML-Ready CSV
+        </button>
+        <div
+          style={{ fontSize: "0.62rem", color: C.muted, marginTop: "0.375rem" }}
+        >
+          Missing values filled · Numeric columns only
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Insights tab ──────────────────────────────────────────────────────────
+function InsightsTab({ analysis, siteType }: any) {
+  const insights = analysis.insights ?? [];
+  const sc = (s: string) =>
+    s === "high" ? C.cyan : s === "medium" ? C.gold : C.dim;
+
+  return (
+    <div>
       <GlassCard>
         <SectionTitle>Data Health</SectionTitle>
         <div
@@ -1523,21 +1322,17 @@ function InsightsTab({
           }}
         >
           {[
-            { label: "Completeness", value: "98%", color: "#00f5c8" },
-            {
-              label: "Latency",
-              value: siteType.includes("finance") ? "15 min" : "Real-time",
-              color: "#f59e0b",
-            },
-            { label: "Source", value: "Verified", color: "#00f5c8" },
+            { label: "Completeness", value: "98%", color: C.green },
+            { label: "Freshness", value: "Live", color: C.gold },
+            { label: "Verified", value: "✓", color: C.cyan },
           ].map(({ label, value, color }) => (
             <div
               key={label}
               style={{
                 textAlign: "center",
                 padding: "0.75rem",
-                background: "rgba(255,255,255,0.02)",
-                borderRadius: "8px",
+                background: C.bg2,
+                borderRadius: 8,
               }}
             >
               <div
@@ -1553,7 +1348,7 @@ function InsightsTab({
               <div
                 style={{
                   fontSize: "0.58rem",
-                  color: "#475569",
+                  color: C.muted,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
                   marginTop: "0.2rem",
@@ -1566,20 +1361,19 @@ function InsightsTab({
         </div>
       </GlassCard>
 
-      {/* Insights */}
       {insights.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#475569", padding: "2rem" }}>
+        <div style={{ textAlign: "center", color: C.muted, padding: "2rem" }}>
           No insights generated
         </div>
       ) : (
-        insights.map((ins, i) => (
+        insights.map((ins: any, i: number) => (
           <div
             key={i}
             style={{
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderLeft: `3px solid ${sigColor(ins.significance)}`,
-              borderRadius: "10px",
+              background: C.bg2,
+              border: `1px solid ${C.border}`,
+              borderLeft: `3px solid ${sc(ins.significance)}`,
+              borderRadius: 10,
               padding: "1rem 1.25rem",
               marginBottom: "0.625rem",
             }}
@@ -1590,34 +1384,46 @@ function InsightsTab({
                 alignItems: "center",
                 gap: "0.5rem",
                 marginBottom: "0.5rem",
+                flexWrap: "wrap",
               }}
             >
               <div
                 style={{
-                  width: "6px",
-                  height: "6px",
+                  width: 6,
+                  height: 6,
                   borderRadius: "50%",
-                  background: sigColor(ins.significance),
+                  background: sc(ins.significance),
                   flexShrink: 0,
                 }}
               />
               <span
                 style={{
-                  fontSize: "0.6rem",
-                  color: sigColor(ins.significance),
+                  fontSize: "0.58rem",
+                  color: sc(ins.significance),
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                 }}
               >
-                {ins.significance} significance
+                {ins.significance}
               </span>
-              {ins.category && <Badge text={ins.category} color="#64748b" />}
+              {ins.category && <Badge text={ins.category} color={C.dim} />}
+              {ins.dataPoint && (
+                <span
+                  style={{
+                    fontSize: "0.62rem",
+                    color: C.muted,
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {String(ins.dataPoint).slice(0, 40)}
+                </span>
+              )}
             </div>
             <p
               style={{
                 fontSize: "0.82rem",
-                color: "#cbd5e1",
-                lineHeight: 1.7,
+                color: C.text,
+                lineHeight: 1.75,
                 margin: 0,
               }}
             >
@@ -1627,22 +1433,21 @@ function InsightsTab({
         ))
       )}
 
-      {/* Scenario analysis if available */}
       {analysis.scenarios && (
         <GlassCard>
           <SectionTitle>Scenario Analysis</SectionTitle>
           {Object.entries(analysis.scenarios).map(
             ([key, val]: [string, any]) => (
-              <div key={key} style={{ marginBottom: "0.75rem" }}>
+              <div key={key} style={{ marginBottom: "0.875rem" }}>
                 <div
                   style={{
-                    fontSize: "0.7rem",
+                    fontSize: "0.68rem",
                     color:
                       key === "bull"
-                        ? "#00f5c8"
+                        ? C.green
                         : key === "bear"
-                          ? "#ef4444"
-                          : "#f59e0b",
+                          ? C.red
+                          : C.gold,
                     textTransform: "uppercase",
                     letterSpacing: "0.1em",
                     marginBottom: "0.25rem",
@@ -1657,9 +1462,9 @@ function InsightsTab({
                 <p
                   style={{
                     fontSize: "0.78rem",
-                    color: "#94a3b8",
+                    color: C.slate,
                     margin: 0,
-                    lineHeight: 1.6,
+                    lineHeight: 1.7,
                   }}
                 >
                   {val}
@@ -1673,31 +1478,21 @@ function InsightsTab({
   );
 }
 
-/* ── Predictions Tab ──────────────────────────────────────────────────────── */
-function PredictionsTab({
-  analysis,
-  siteType,
-  enriched,
-}: {
-  analysis: any;
-  siteType: string;
-  enriched?: any;
-}) {
+// ── Predictions tab ───────────────────────────────────────────────────────
+function PredictionsTab({ analysis, siteType, enriched }: any) {
   const pred = analysis.prediction ?? {};
   const pct = parseInt(pred.confidence) || 70;
-  const color = getSignalColor(pred.result ?? "");
-  const forecast = analysis.forecast ?? [];
+  const color = signalColor(pred.result ?? "");
 
   return (
     <div>
-      {/* Main verdict */}
       <GlassCard
         style={{ borderColor: `${color}30`, background: `${color}06` }}
       >
         <SectionTitle>Prediction Verdict</SectionTitle>
         <div
           style={{
-            fontSize: "2rem",
+            fontSize: "clamp(1.3rem,3vw,2rem)",
             fontWeight: 800,
             color,
             fontFamily: "monospace",
@@ -1706,12 +1501,12 @@ function PredictionsTab({
         >
           {pred.result ?? "—"}
         </div>
-        <ConfidenceBar pct={pct} color={color} />
+        <ConfBar pct={pct} color={color} />
         <p
           style={{
             fontSize: "0.82rem",
-            color: "#94a3b8",
-            lineHeight: 1.7,
+            color: C.slate,
+            lineHeight: 1.75,
             marginTop: "1rem",
             marginBottom: 0,
           }}
@@ -1720,40 +1515,38 @@ function PredictionsTab({
         </p>
       </GlassCard>
 
-      {/* Finance: News sentiment breakdown */}
       {siteType === "finance_deep" && enriched?.sentiment && (
         <GlassCard>
-          <SectionTitle>News Sentiment Analysis</SectionTitle>
+          <SectionTitle>News Sentiment Breakdown</SectionTitle>
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(3,1fr)",
               gap: "0.625rem",
-              marginBottom: "1rem",
+              marginBottom: "0.875rem",
             }}
           >
             {[
               {
                 label: "Bullish",
                 count: enriched.sentiment.bullish,
-                color: "#00f5c8",
+                color: C.green,
               },
               {
                 label: "Neutral",
                 count: enriched.sentiment.neutral,
-                color: "#f59e0b",
+                color: C.gold,
               },
               {
                 label: "Bearish",
                 count: enriched.sentiment.bearish,
-                color: "#ef4444",
+                color: C.red,
               },
             ].map(({ label, count, color: c }) => {
-              const total =
+              const t =
                 enriched.sentiment.bullish +
                   enriched.sentiment.neutral +
                   enriched.sentiment.bearish || 1;
-              const pctVal = Math.round((count / total) * 100);
               return (
                 <div
                   key={label}
@@ -1762,7 +1555,7 @@ function PredictionsTab({
                     padding: "1rem 0.5rem",
                     background: `${c}08`,
                     border: `1px solid ${c}20`,
-                    borderRadius: "10px",
+                    borderRadius: 10,
                   }}
                 >
                   <div
@@ -1778,7 +1571,7 @@ function PredictionsTab({
                   <div
                     style={{
                       fontSize: "0.6rem",
-                      color: "#475569",
+                      color: C.muted,
                       textTransform: "uppercase",
                       letterSpacing: "0.1em",
                     }}
@@ -1789,152 +1582,26 @@ function PredictionsTab({
                     style={{
                       fontSize: "0.65rem",
                       color: c,
-                      marginTop: "0.25rem",
+                      marginTop: "0.2rem",
                     }}
                   >
-                    {pctVal}%
+                    {Math.round((count / t) * 100)}%
                   </div>
                 </div>
               );
             })}
           </div>
-          <div
-            style={{
-              fontSize: "0.75rem",
-              color: "#64748b",
-              textAlign: "center",
-            }}
-          >
-            Overall:{" "}
-            <span
-              style={{
-                color: getSignalColor(enriched.sentiment.overall ?? ""),
-                fontWeight: 600,
-              }}
-            >
-              {enriched.sentiment.overall}
-            </span>
-          </div>
         </GlassCard>
       )}
 
-      {/* News articles with sentiment */}
-      {siteType === "finance_deep" && enriched?.news?.length > 0 && (
-        <GlassCard>
-          <SectionTitle>Latest News — Sentiment Scored</SectionTitle>
-          {enriched.news.slice(0, 8).map((n: any, i: number) => {
-            const sentColor = n.sentiment?.includes("Bullish")
-              ? "#00f5c8"
-              : n.sentiment?.includes("Bearish")
-                ? "#ef4444"
-                : "#f59e0b";
-            return (
-              <div
-                key={i}
-                style={{
-                  padding: "0.625rem 0",
-                  borderBottom:
-                    i < 7 ? "1px solid rgba(255,255,255,0.04)" : "none",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "0.625rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: sentColor,
-                      flexShrink: 0,
-                      marginTop: "4px",
-                    }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <a
-                      href={n.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        fontSize: "0.78rem",
-                        color: "#e2e8f0",
-                        textDecoration: "none",
-                        display: "block",
-                        marginBottom: "0.2rem",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {n.title}
-                    </a>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                        fontSize: "0.62rem",
-                        color: "#475569",
-                      }}
-                    >
-                      <span style={{ color: sentColor }}>{n.sentiment}</span>
-                      <span>·</span>
-                      <span>{n.source}</span>
-                      <span>·</span>
-                      <span>{n.publishedAt}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </GlassCard>
-      )}
-
-      {/* Forecast points if present */}
-      {forecast.length > 0 && (
-        <GlassCard>
-          <SectionTitle>30-Day Forecast Signals</SectionTitle>
-          {forecast.map((f: any, i: number) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "0.5rem 0",
-                borderBottom:
-                  i < forecast.length - 1
-                    ? "1px solid rgba(255,255,255,0.04)"
-                    : "none",
-              }}
-            >
-              <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                {f.label}
-              </span>
-              <span
-                style={{
-                  fontSize: "0.78rem",
-                  color: "#e2e8f0",
-                  fontFamily: "monospace",
-                }}
-              >
-                {f.value}
-              </span>
-            </div>
-          ))}
-        </GlassCard>
-      )}
-
-      {/* Best use case */}
       {analysis.bestUseCase && (
         <GlassCard>
           <SectionTitle>Recommended Action</SectionTitle>
           <p
             style={{
               fontSize: "0.82rem",
-              color: "#94a3b8",
-              lineHeight: 1.7,
+              color: C.slate,
+              lineHeight: 1.75,
               margin: 0,
             }}
           >
@@ -1946,7 +1613,7 @@ function PredictionsTab({
   );
 }
 
-/* ── Main Panel ───────────────────────────────────────────────────────────── */
+// ── Main Panel ─────────────────────────────────────────────────────────────
 export function AixplorePanel({
   analysis,
   records,
@@ -1960,24 +1627,55 @@ export function AixplorePanel({
   const site = getSiteConfig(siteType);
   analysis._records = records;
 
+  function downloadCleanCSV() {
+    const ml = analysis.mlReadiness;
+    if (!records.length) return;
+    const numCols =
+      ml?.numericCols ??
+      Object.keys(records[0]).filter(
+        (k) => !isNaN(parseFloat(String(records[0][k]))),
+      );
+    const cols = numCols.length > 0 ? numCols : Object.keys(records[0]);
+    const rows = records.map((r) => {
+      const row: any = {};
+      cols.forEach((k: string) => {
+        const v = String(r[k] ?? "")
+          .replace(/[₹$,%]/g, "")
+          .trim();
+        row[k] = isNaN(parseFloat(v)) ? "0" : parseFloat(v);
+      });
+      return row;
+    });
+    const csv = [
+      cols.join(","),
+      ...rows.map((r: any) => cols.map((k: string) => r[k]).join(",")),
+    ].join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `ml-ready-${Date.now()}.csv`;
+    a.click();
+  }
+
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "overview", label: "Overview", icon: "◈" },
     { key: "data", label: "Data", icon: "⊞" },
+    { key: "charts", label: "Charts", icon: "⬡" },
     { key: "insights", label: "Insights", icon: "◉" },
-    { key: "predictions", label: "Predictions", icon: "◆" },
+    { key: "ml", label: "ML", icon: "⬡" },
+    { key: "predictions", label: "Predict", icon: "◆" },
   ];
 
   return (
     <div
       style={{
-        background: "#04040a",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: "16px",
+        background: C.bg0,
+        border: `1px solid ${C.border}`,
+        borderRadius: 16,
         overflow: "hidden",
-        fontFamily: "'DM Sans', sans-serif",
+        fontFamily: "'DM Sans',sans-serif",
       }}
     >
-      {/* ── Header ── */}
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -1985,23 +1683,20 @@ export function AixplorePanel({
           justifyContent: "space-between",
           padding: "1rem 1.5rem",
           background: "rgba(255,255,255,0.02)",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          borderBottom: `1px solid ${C.border}`,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ color: site.color, fontSize: "0.9rem" }}>✦</span>
-            <span
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: 700,
-                color: "#f0eff8",
-                letterSpacing: "0.06em",
-              }}
-            >
-              AIXPLORE
-            </span>
-          </div>
+          <span
+            style={{
+              color: site.color,
+              fontSize: "0.9rem",
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+            }}
+          >
+            ✦ AIXPLORE
+          </span>
           <div
             style={{
               display: "flex",
@@ -2010,13 +1705,13 @@ export function AixplorePanel({
               padding: "0.25rem 0.625rem",
               background: `${site.color}12`,
               border: `1px solid ${site.color}25`,
-              borderRadius: "100px",
+              borderRadius: 100,
             }}
           >
             <span style={{ fontSize: "0.75rem" }}>{site.icon}</span>
             <span
               style={{
-                fontSize: "0.62rem",
+                fontSize: "0.6rem",
                 color: site.color,
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
@@ -2030,14 +1725,13 @@ export function AixplorePanel({
           <button
             onClick={onRescrape}
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              color: "#64748b",
+              background: C.bg2,
+              border: `1px solid ${C.border}`,
+              color: C.muted,
               padding: "0.375rem 0.875rem",
-              borderRadius: "8px",
+              borderRadius: 8,
               fontSize: "0.72rem",
               cursor: "pointer",
-              letterSpacing: "0.04em",
             }}
           >
             ↺ New
@@ -2045,12 +1739,12 @@ export function AixplorePanel({
           <button
             onClick={onClose}
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              color: "#64748b",
-              width: "32px",
-              height: "32px",
-              borderRadius: "8px",
+              background: C.bg2,
+              border: `1px solid ${C.border}`,
+              color: C.muted,
+              width: 32,
+              height: 32,
+              borderRadius: 8,
               fontSize: "0.8rem",
               cursor: "pointer",
               display: "flex",
@@ -2063,13 +1757,14 @@ export function AixplorePanel({
         </div>
       </div>
 
-      {/* ── Tabs ── */}
+      {/* Tabs */}
       <div
         style={{
           display: "flex",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-          padding: "0 1rem",
+          borderBottom: `1px solid ${C.border}`,
+          padding: "0 0.75rem",
           background: "rgba(255,255,255,0.01)",
+          overflowX: "auto",
         }}
       >
         {tabs.map((t) => (
@@ -2077,35 +1772,48 @@ export function AixplorePanel({
             key={t.key}
             onClick={() => setTab(t.key)}
             style={{
-              padding: "0.75rem 1rem",
-              fontSize: "0.72rem",
+              padding: "0.75rem 0.875rem",
+              fontSize: "0.68rem",
               letterSpacing: "0.06em",
               background: "none",
               border: "none",
               cursor: "pointer",
-              color: tab === t.key ? site.color : "#475569",
+              color: tab === t.key ? site.color : C.dim,
               borderBottom:
                 tab === t.key
                   ? `2px solid ${site.color}`
                   : "2px solid transparent",
               display: "flex",
               alignItems: "center",
-              gap: "0.375rem",
+              gap: "0.3rem",
               transition: "color 0.2s",
               textTransform: "uppercase",
+              whiteSpace: "nowrap",
             }}
           >
-            <span>{t.icon}</span>
             {t.label}
+            {t.key === "charts" && (analysis.charts?.length ?? 0) > 0 && (
+              <span
+                style={{
+                  fontSize: "0.55rem",
+                  background: `${site.color}30`,
+                  color: site.color,
+                  borderRadius: 10,
+                  padding: "0 4px",
+                }}
+              >
+                {analysis.charts.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* ── Body ── */}
+      {/* Body */}
       <div
         style={{
           padding: "1.25rem 1.5rem",
-          maxHeight: "70vh",
+          maxHeight: "72vh",
           overflowY: "auto",
         }}
       >
@@ -2120,8 +1828,22 @@ export function AixplorePanel({
         {tab === "data" && (
           <DataTab records={records} siteType={siteType} enriched={enriched} />
         )}
+        {tab === "charts" && (
+          <ChartsTab
+            analysis={analysis}
+            records={records}
+            enriched={enriched}
+          />
+        )}
         {tab === "insights" && (
           <InsightsTab analysis={analysis} siteType={siteType} />
+        )}
+        {tab === "ml" && (
+          <MLTab
+            analysis={analysis}
+            records={records}
+            onDownloadClean={downloadCleanCSV}
+          />
         )}
         {tab === "predictions" && (
           <PredictionsTab
