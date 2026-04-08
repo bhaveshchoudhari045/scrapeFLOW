@@ -156,7 +156,7 @@ DELIVER_VIA_WEBHOOK: DeliverViaWebhookTask,
 EXTRACT_DATA_WITH_AI: ExtractDataWithAITask,
 READ_PROPERTY_FROM_JSON: ReadPropertyFromJsonTask,
 ADD_PROPERTY_TO_JSON: AddPropertyToJsonTask,
-NAVIGATE_TO_URL: NavigateUrlTask,
+NAVIGATE_URL: NavigateUrlTask,
 SCROLL_TO_ELEMENT: ScrollToElementTask,
 };
 

@@ -43,7 +43,7 @@
   font-size: 0.95rem;
   font-weight: 700;
   background: linear-gradient(90deg, #00f5ff, #a78bfa);
-  -webkit-background-clip: text;
+  --backgrounwebkitd-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .fs-steps {
@@ -239,6 +239,7 @@
   margin-bottom: 0.875rem;
   background: linear-gradient(135deg, #f0eff8 0%, #a78bfa 50%, #00f5ff 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .fs-hero-sub {

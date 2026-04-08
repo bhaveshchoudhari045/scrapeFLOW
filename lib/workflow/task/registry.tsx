@@ -1,4 +1,3 @@
-// @/lib/workflow/task/registry.ts
 import { LaunchBrowserTask } from "./LaunchBrowser";
 import { TaskType } from "@/types/task";
 import { PageToHtmlTask } from "./PageToHtml";
@@ -31,23 +30,28 @@ import { LoopStartRepeat } from "./LoopStartRepeat";
 import { LoopStartUntilCondition } from "./LoopStartUntilCondition";
 import { RandomDelay } from "./RandomDelay";
 import { SentimentAnalyzer } from "./SentimentAnalyzer";
-
 import { StopWorkflow } from "./StopWorkflow";
 import { TransformArraysToObjects } from "./TransformArraysToObjects";
 import { Visualizer } from "./Visualizer";
 import { SessionTask } from "./Session";
 
+// Use a looser icon signature for the registry so individual task files
+// returning JSX.Element (a subtype of ReactNode) don't cause variance errors.
+type RegistryTask = Omit<WorkflowTask, "icon"> & {
+  icon: (props: any) => any;
+};
+
 type Registry = {
-  [k in TaskType]?: WorkflowTask;
+  [k in TaskType]?: RegistryTask;
 };
 
 export const TaskRegistry: Registry = {
   LAUNCH_BROWSER: LaunchBrowserTask,
-  SESSION_COOKIES: SessionTask, //here is the same error
+  SESSION_COOKIES: SessionTask,
   PAGE_TO_HTML: PageToHtmlTask,
   EXTRACT_TEXT_FROM_ELEMENT: ExtractTextFromElementTask,
-  EXTRACT_STRUCTURED_LIST: ExtractStructuredListTask, //here is the same error
-  EXTRACT_STRUCTURED_OBJECT: ExtractStructuredObjectTask, //here is the same error
+  EXTRACT_STRUCTURED_LIST: ExtractStructuredListTask,
+  EXTRACT_STRUCTURED_OBJECT: ExtractStructuredObjectTask,
   FILL_INPUT: FillInputTask,
   CLICK_ELEMENT: ClickElementTask,
   WAIT_FOR_ELEMENT: WaitForElementTask,
@@ -55,25 +59,25 @@ export const TaskRegistry: Registry = {
   EXTRACT_DATA_WITH_AI: ExtractDataWithAITask,
   READ_PROPERTY_FROM_JSON: ReadPropertyFromJsonTask,
   ADD_PROPERTY_TO_JSON: AddPropertyToJsonTask,
-  TRANSFORM_ARRAYS_TO_OBJECTS: TransformArraysToObjects, //here is the same error
-  NAVIGATE_TO_URL: NavigateUrlTask,
+  TRANSFORM_ARRAYS_TO_OBJECTS: TransformArraysToObjects,
+  NAVIGATE_URL: NavigateUrlTask,
   SCROLL_TO_ELEMENT: ScrollToElementTask,
-  FILTER_ARRAY: FilterArray, //here is the same error
-  INFINITE_SCROLL: InfiniteScroll, //here is the same error
-  RANDOM_DELAY: RandomDelay, //here is the same error
-  EXPORT_CSV: ExportCSV, //here is the same error
-  EXTRACT_TABLE_DATA: ExtractTableData, //here is the same error
-  CONVERT_FIELDS_TO_NUMBER: ConvertFieldsToNumber, //here is the same error
-  LOOP_START_ARRAY: LoopStartArray, //here is the same error
-  LOOP_START_REPEAT: LoopStartRepeat, //here is the same error
-  LOOP_START_UNTIL_CONDITION: LoopStartUntilCondition, //here is the same error
-  LOOP_END: LoopEnd, //here is the same error
-  FLOW_CONTROL_ACTION: FlowControlAction, //here is the same error
-  IF_CONDITION: IfCondition, //here is the same error
-  STOP_WORKFLOW: StopWorkflow, //here is the same error
-  SENTIMENT_ANALYZER: SentimentAnalyzer, //here is the same error
-  AI_SUMMARIZER: AISummarizer, //here is the same error
-  VISUALIZER: Visualizer, //here is the same error
-  BATCH_LOOP_OVER: BatchLoopOverTask, //here is the same error
+  FILTER_ARRAY: FilterArray,
+  INFINITE_SCROLL: InfiniteScroll,
+  RANDOM_DELAY: RandomDelay,
+  EXPORT_CSV: ExportCSV,
+  EXTRACT_TABLE_DATA: ExtractTableData,
+  CONVERT_FIELDS_TO_NUMBER: ConvertFieldsToNumber,
+  LOOP_START_ARRAY: LoopStartArray,
+  LOOP_START_REPEAT: LoopStartRepeat,
+  LOOP_START_UNTIL_CONDITION: LoopStartUntilCondition,
+  LOOP_END: LoopEnd,
+  FLOW_CONTROL_ACTION: FlowControlAction,
+  IF_CONDITION: IfCondition,
+  STOP_WORKFLOW: StopWorkflow,
+  SENTIMENT_ANALYZER: SentimentAnalyzer,
+  AI_SUMMARIZER: AISummarizer,
+  VISUALIZER: Visualizer,
+  BATCH_LOOP_OVER: BatchLoopOverTask,
   GENERATE_ANALYTICAL_REPORT: GenerateAnalyticalReport,
 };

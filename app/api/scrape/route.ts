@@ -6,11 +6,15 @@ const NEWS_API_KEY = process.env.NEWS_API_KEY!;
 const NASA_API_KEY = process.env.NASA_API_KEY || "DEMO_KEY";
 const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY!;
 const GROQ_API_KEY = process.env.GROQ_API_KEY!;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 
-// ── Only models confirmed working on free tier ──────────────────────
-const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+const GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama3-70b-8192",
+  "mixtral-8x7b-32768",
+  "llama-3.1-8b-instant",
+];
 
-// ── Domains that always block scrapers → use NewsAPI instead ─────────
 const NEWS_API_DOMAINS = [
   "reuters.com",
   "bloomberg.com",
@@ -18,10 +22,7 @@ const NEWS_API_DOMAINS = [
   "bbc.com",
   "bbc.co.uk",
   "theguardian.com",
-  "washingtonpost.com",
-  "ft.com",
   "wsj.com",
-  "economist.com",
   "apnews.com",
   "cnn.com",
   "aljazeera.com",
@@ -32,8 +33,6 @@ const NEWS_API_DOMAINS = [
   "hindustantimes.com",
   "indianexpress.com",
 ];
-
-// ── Domains that block all scraping entirely ─────────────────────────
 const BLOCKED_DOMAINS = [
   "statista.com",
   "jstor.org",
@@ -46,7 +45,31 @@ const BLOCKED_DOMAINS = [
   "ourworldindata.org",
 ];
 
-async function callGroq(prompt: string, maxTokens = 3000): Promise<string> {
+// ── AI caller ─────────────────────────────────────────────────────────────
+async function callAI(prompt: string, maxTokens = 3000): Promise<string> {
+  // Claude first — much better at structured extraction
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const d = await res.json();
+    if (res.ok) {
+      const text = (d.content?.[0]?.text ?? "").trim();
+      if (text) return text;
+    }
+  } catch {}
+
+  // Groq fallback
   for (const model of GROQ_MODELS) {
     try {
       const res = await fetch(
@@ -65,42 +88,141 @@ async function callGroq(prompt: string, maxTokens = 3000): Promise<string> {
           }),
         },
       );
-      if (res.status === 429) {
-        console.warn(`[groq] ${model} rate limited, trying next`);
+      if (res.status === 429 || res.status === 404 || res.status === 400)
         continue;
-      }
-      if (res.status === 413) {
-        console.warn(`[groq] ${model} prompt too large, trying next`);
-        continue;
-      }
-      if (!res.ok) {
-        console.warn(`[groq] ${model} HTTP ${res.status}`);
-        continue;
-      }
-      const data = await res.json();
-      const text = (data.choices?.[0]?.message?.content ?? "").trim();
+      if (!res.ok) continue;
+      const d = await res.json();
+      const text = (d.choices?.[0]?.message?.content ?? "").trim();
       if (text) return text;
-    } catch (e: any) {
-      console.warn(`[groq] ${model}:`, e.message?.slice(0, 80));
-    }
+    } catch {}
   }
   return "";
 }
 
-// ── Sentiment ───────────────────────────────────────────────────────
+// ── Extract with AI — uses extraction rules from query intelligence ────────
+async function extractWithAI(
+  content: string,
+  intent: string,
+  sourceName: string,
+  qi?: any, // QueryIntelligence from suggest route
+): Promise<any[]> {
+  if (!content || content.length < 50) return [];
+
+  const mustHave =
+    qi?.extractionRules?.mustHaveFields?.join(", ") ||
+    "Title, Name, Price, Description";
+  const mustExclude = qi?.extractionRules?.mustExclude?.join(", ") || "";
+  const mustFilter = qi?.extractionRules?.mustFilter?.join(", ") || "";
+  const refined = qi?.refinedQuery || intent;
+  const outputFmt = qi?.extractionRules?.outputFormat || "general";
+  const priceMax = qi?.entities?.priceRange?.max;
+  const priceMin = qi?.entities?.priceRange?.min;
+  const category = qi?.entities?.category || "general";
+
+  // Build category-specific extraction schema
+  let schema = "";
+  if (outputFmt === "product_list" || category === "ecommerce") {
+    schema = `[{"_sourceName":"${sourceName}","_sourceType":"product","Name":"EXACT product name","Price":"numeric price in ₹ or Rs format","OriginalPrice":"original price if discounted","Discount":"X% off if shown","Rating":"X.X out of 5","Reviews":"number of reviews","Brand":"brand name","Processor":"processor model","RAM":"RAM amount","Storage":"storage amount","Display":"screen size","Graphics":"GPU if any","Battery":"battery capacity","OS":"operating system","URL":"product link if found"}]`;
+  } else if (outputFmt === "research_papers" || category === "academic") {
+    schema = `[{"_sourceName":"${sourceName}","_sourceType":"academic","Title":"full paper title","Authors":"author names","Year":"publication year","Citations":"citation count","Abstract":"full abstract text","Journal":"journal/venue name","URL":"paper URL or DOI"}]`;
+  } else if (outputFmt === "news_articles" || category === "news") {
+    schema = `[{"_sourceName":"${sourceName}","_sourceType":"news","Title":"article headline","Description":"full article summary","Author":"author name","Date":"YYYY-MM-DD","Source":"publication name","URL":"article URL","Sentiment":"positive/negative/neutral"}]`;
+  } else if (outputFmt === "career_stats" || category === "sports") {
+    schema = `[{"_sourceName":"${sourceName}","_sourceType":"tabular","Player":"name","Format":"Test/ODI/T20","Matches":"number","Innings":"number","Runs":"number","Average":"number","StrikeRate":"number","HighScore":"number","Centuries":"number","Fifties":"number","NotOuts":"number"}]`;
+  } else if (outputFmt === "stock_data" || category === "finance") {
+    schema = `[{"_sourceName":"${sourceName}","_sourceType":"finance","Symbol":"ticker","Price":"current price","Change":"price change","ChangePercent":"% change","Volume":"volume","MarketCap":"market cap","PE":"P/E ratio"}]`;
+  } else {
+    schema = `[{"_sourceName":"${sourceName}","_sourceType":"general","Title":"title or name","Content":"main content","Value":"key value","Date":"date if present","URL":"link if present"}]`;
+  }
+
+  const priceFilter = priceMax
+    ? `\nCRITICAL PRICE FILTER: ONLY include items where price is LESS THAN ${priceMax}. Completely skip any item above this price.`
+    : "";
+
+  const excludeFilter = mustExclude
+    ? `\nCRITICAL EXCLUSION: DO NOT include any of these — ${mustExclude}. These are completely irrelevant.`
+    : "";
+
+  const prompt = `You are a precise data extraction system. Extract ONLY what was asked for.
+
+USER SEARCHED FOR: "${refined}"
+SOURCE: ${sourceName}
+${priceFilter}
+${excludeFilter}
+REQUIRED FIELDS: ${mustHave}
+FILTER CRITERIA: ${mustFilter || "relevant items only"}
+
+PAGE CONTENT:
+${content.slice(0, 7000)}
+
+Return ONLY a JSON array matching this schema. No markdown. Start [ end ]:
+${schema}
+
+RULES:
+1. ${priceMax ? `MANDATORY: Skip ALL items with price above ₹${priceMax.toLocaleString()}` : "Include all relevant items"}
+2. ${mustExclude ? `MANDATORY: Skip items that are: ${mustExclude}` : "Include all relevant results"}
+3. Extract REAL values — no placeholders, no "N/A" unless genuinely missing
+4. Minimum 5 items if data exists on page
+5. For prices: convert to number format (remove ₹, commas) — keep as "₹X,XXX" string
+6. If page has no relevant data for "${refined}", return []`;
+
+  const raw = await callAI(prompt, 3000);
+  if (!raw) return [];
+
+  let records: any[] = [];
+  try {
+    const m = raw.match(/\[[\s\S]*\]/);
+    if (m) records = JSON.parse(m[0]);
+  } catch {
+    try {
+      const clean = raw.replace(/,(\s*[\]}])/g, "$1");
+      const m2 = clean.match(/\[[\s\S]*\]/);
+      if (m2) records = JSON.parse(m2[0]);
+    } catch {}
+  }
+
+  // Post-filter: enforce price constraint if AI missed it
+  if (priceMax) {
+    records = records.filter((r) => {
+      const priceStr = String(r.Price ?? r.price ?? "");
+      if (!priceStr) return true; // keep if no price (let user decide)
+      const priceNum = parseFloat(priceStr.replace(/[₹Rs.,\s]/gi, ""));
+      if (isNaN(priceNum)) return true;
+      return priceNum <= priceMax;
+    });
+  }
+
+  // Post-filter: exclude irrelevant items
+  if (mustExclude && qi?.extractionRules?.mustExclude?.length) {
+    const excludeTerms = qi.extractionRules.mustExclude.map((t: string) =>
+      t.toLowerCase(),
+    );
+    records = records.filter((r) => {
+      const name = String(r.Name ?? r.Title ?? "").toLowerCase();
+      return !excludeTerms.some((term: any) => name.includes(term));
+    });
+  }
+
+  console.log(
+    `[extract] ${sourceName}: ${records.length} records after filtering`,
+  );
+  return records.filter(
+    (r) => Object.keys(r).filter((k) => !k.startsWith("_")).length >= 2,
+  );
+}
+
+// ── Sentiment ─────────────────────────────────────────────────────────────
 function sentiment(text: string): "🟢 Positive" | "🔴 Negative" | "🟡 Neutral" {
   const t = text.toLowerCase();
-  const pos = [
+  let s = 0;
+  [
     "surge",
     "soar",
-    "rally",
     "gain",
-    "rise",
     "profit",
     "beat",
     "strong",
     "growth",
-    "record",
     "bullish",
     "upgrade",
     "breakthrough",
@@ -108,11 +230,12 @@ function sentiment(text: string): "🟢 Positive" | "🔴 Negative" | "🟡 Neut
     "win",
     "positive",
     "increase",
-    "improve",
     "boost",
     "advance",
-  ];
-  const neg = [
+  ].forEach((w) => {
+    if (t.includes(w)) s++;
+  });
+  [
     "fall",
     "drop",
     "crash",
@@ -124,9 +247,6 @@ function sentiment(text: string): "🟢 Positive" | "🔴 Negative" | "🟡 Neut
     "bearish",
     "downgrade",
     "risk",
-    "concern",
-    "warning",
-    "debt",
     "fail",
     "crisis",
     "war",
@@ -134,14 +254,7 @@ function sentiment(text: string): "🟢 Positive" | "🔴 Negative" | "🟡 Neut
     "negative",
     "decrease",
     "threat",
-    "conflict",
-    "sanction",
-  ];
-  let s = 0;
-  pos.forEach((w) => {
-    if (t.includes(w)) s++;
-  });
-  neg.forEach((w) => {
+  ].forEach((w) => {
     if (t.includes(w)) s--;
   });
   return s > 0 ? "🟢 Positive" : s < 0 ? "🔴 Negative" : "🟡 Neutral";
@@ -161,14 +274,12 @@ function calcRSI(closes: number[], p = 14): number {
   if (al === 0) return 100;
   return parseFloat((100 - 100 / (1 + ag / al)).toFixed(2));
 }
-
 function calcEMA(d: number[], p: number): number[] {
   const k = 2 / (p + 1),
     ema = [d[0]];
   for (let i = 1; i < d.length; i++) ema.push(d[i] * k + ema[i - 1] * (1 - k));
   return ema;
 }
-
 function calcMACD(closes: number[]) {
   if (closes.length < 26)
     return { macd: 0, signal: 0, histogram: 0, trend: "N/A" };
@@ -185,7 +296,6 @@ function calcMACD(closes: number[]) {
     trend: m > s ? "📈 Bullish" : "📉 Bearish",
   };
 }
-
 function rsiSignal(r: number) {
   if (r >= 70) return "Overbought ⚠️";
   if (r <= 30) return "Oversold 📈";
@@ -193,7 +303,6 @@ function rsiSignal(r: number) {
   if (r <= 45) return "Bearish 📉";
   return "Neutral ➡️";
 }
-
 function fmtNum(n: string | number): string {
   const v = parseFloat(String(n));
   if (isNaN(v)) return String(n) || "N/A";
@@ -203,26 +312,23 @@ function fmtNum(n: string | number): string {
   return v.toLocaleString();
 }
 
-// ── Safe HTML fetch ─────────────────────────────────────────────────
+// ── Safe HTML fetch ───────────────────────────────────────────────────────
 async function safeFetch(url: string, maxChars = 8000): Promise<string> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
     const res = await fetch(url, {
-      signal: controller.signal,
+      signal: ctrl.signal,
       headers: {
         "User-Agent":
           "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
         Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
-        "Cache-Control": "no-cache",
       },
     });
     clearTimeout(timer);
     if (!res.ok) {
-      console.warn(
-        `[safeFetch] ${new URL(url).hostname} returned ${res.status}`,
-      );
+      console.warn(`[safeFetch] ${new URL(url).hostname} ${res.status}`);
       return "";
     }
     const html = await res.text();
@@ -236,63 +342,50 @@ async function safeFetch(url: string, maxChars = 8000): Promise<string> {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim()
-      .slice(0, maxChars); // Strict limit to avoid 413
-  } catch (err: any) {
-    console.warn(
-      `[safeFetch] ${url.slice(0, 60)} failed:`,
-      err.message?.slice(0, 60),
-    );
+      .slice(0, maxChars);
+  } catch {
     return "";
   }
 }
 
-// ── Extract structured records from page text ───────────────────────
-async function extractWithGroq(
-  text: string,
+// ── Firecrawl ─────────────────────────────────────────────────────────────
+async function fetchFromFirecrawl(
+  url: string,
   intent: string,
   sourceName: string,
-  url: string,
+  qi?: any,
 ): Promise<any[]> {
-  if (!text || text.length < 50) return [];
-
-  // Keep prompt small to avoid 413
-  const trimmedText = text.slice(0, 6000);
-
-  const raw = await callGroq(
-    `Extract structured data from this page for: "${intent.slice(0, 100)}"
-Source: ${sourceName}
-
-Page text:
-${trimmedText}
-
-Return ONLY a JSON array. No markdown. Start [ end ].
-- News articles: [{"_sourceName":"${sourceName}","_sourceType":"news","Title":"full title","Description":"full paragraph - keep complete","Author":"","Date":"YYYY-MM-DD","URL":"","Sentiment":""}]
-- Research papers: [{"_sourceName":"${sourceName}","_sourceType":"academic","Title":"","Authors":"","Abstract":"full abstract","Year":"","URL":""}]
-- Stats/tables: [{"_sourceName":"${sourceName}","_sourceType":"tabular","col1":"val","col2":"val"}]
-- Products: [{"_sourceName":"${sourceName}","_sourceType":"product","Name":"","Price":"","Rating":"","Specs":""}]
-Extract ALL items found. Minimum 5 if data exists.`,
-    3000,
-  );
-
-  if (!raw) return [];
-  let records: any[] = [];
+  if (!FIRECRAWL_KEY) return [];
   try {
-    const m = raw.match(/\[[\s\S]*\]/);
-    if (m) records = JSON.parse(m[0]);
+    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${FIRECRAWL_KEY}`,
+      },
+      body: JSON.stringify({
+        url,
+        formats: ["markdown"],
+        onlyMainContent: true,
+        waitFor: 3000,
+        timeout: 20000,
+      }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data.success || !data.data?.markdown) return [];
+    return await extractWithAI(
+      data.data.markdown.slice(0, 7000),
+      intent,
+      sourceName,
+      qi,
+    );
   } catch {
-    try {
-      const fixed = raw.replace(/,\s*$/, "") + "]";
-      const m2 = fixed.match(/\[[\s\S]*/);
-      if (m2) records = JSON.parse(m2[0] + (m2[0].endsWith("]") ? "" : "]"));
-    } catch {}
+    return [];
   }
-  console.log(`[extract] ${sourceName}: ${records.length} records`);
-  return records.filter(
-    (r: any) => Object.keys(r).filter((k) => !k.startsWith("_")).length >= 2,
-  );
 }
 
-// ── NewsAPI — fetches 30 articles for ANY news query ────────────────
+// ── Free API fetchers (unchanged — these work correctly) ──────────────────
 async function fetchFromNewsAPI(intent: string, sourceName = "News") {
   if (!NEWS_API_KEY) return [];
   const q = encodeURIComponent(
@@ -696,22 +789,9 @@ async function fetchFromPubMed(intent: string) {
     );
     const sumData = await sumRes.json();
     const result = sumData?.result ?? {};
-    // Also fetch abstracts
-    const fetchRes = await fetch(
-      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${ids.slice(0, 10).join(",")}&retmode=xml`,
-    );
-    const xml = await fetchRes.text();
     return ids
       .map((id) => {
         const p = result[id] ?? {};
-        const abstractMatch = xml.match(
-          new RegExp(
-            `<PMID[^>]*>${id}</PMID>[\\s\\S]*?<AbstractText[^>]*>([\\s\\S]*?)</AbstractText>`,
-            "i",
-          ),
-        );
-        const abstract =
-          abstractMatch?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "";
         return {
           _sourceName: "PubMed",
           _sourceType: "academic",
@@ -723,7 +803,7 @@ async function fetchFromPubMed(intent: string) {
             .join(", "),
           Journal: p.source ?? "",
           Year: p.pubdate?.split(" ")[0] ?? "",
-          Abstract: abstract,
+          Abstract: "",
           URL: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
         };
       })
@@ -806,11 +886,10 @@ async function fetchFromWikipedia(url: string, intent: string) {
   let articleTitle = "";
   try {
     const u = new URL(url);
-    if (u.pathname.startsWith("/wiki/")) {
+    if (u.pathname.startsWith("/wiki/"))
       articleTitle = decodeURIComponent(
         u.pathname.replace("/wiki/", "").replace(/_/g, " "),
       );
-    }
   } catch {}
   const q =
     articleTitle ||
@@ -829,7 +908,7 @@ async function fetchFromWikipedia(url: string, intent: string) {
       searchRes.json(),
     ]);
     const records: any[] = [];
-    if (sumData?.extract && sumData.type === "standard") {
+    if (sumData?.extract && sumData.type === "standard")
       records.push({
         _sourceName: "Wikipedia",
         _sourceType: "general",
@@ -840,7 +919,6 @@ async function fetchFromWikipedia(url: string, intent: string) {
         Date: "Current",
         _imageUrl: sumData.thumbnail?.source ?? "",
       });
-    }
     const searchResults = searchData?.query?.search ?? [];
     records.push(
       ...searchResults.slice(0, 8).map((r: any) => ({
@@ -907,43 +985,12 @@ async function fetchFromCSV(url: string, sourceName: string) {
   }
 }
 
-async function fetchFromFirecrawl(
-  url: string,
+// ── Route each site — passes QueryIntelligence for precise extraction ─────
+async function fetchFromSite(
+  site: any,
   intent: string,
-  sourceName: string,
-) {
-  if (!FIRECRAWL_KEY) return [];
-  try {
-    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${FIRECRAWL_KEY}`,
-      },
-      body: JSON.stringify({
-        url,
-        formats: ["markdown"],
-        onlyMainContent: true,
-        waitFor: 3000,
-        timeout: 20000,
-      }),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!data.success || !data.data?.markdown) return [];
-    return await extractWithGroq(
-      data.data.markdown.slice(0, 6000),
-      intent,
-      sourceName,
-      url,
-    );
-  } catch {
-    return [];
-  }
-}
-
-// ── Route each site ─────────────────────────────────────────────────
-async function fetchFromSite(site: any, intent: string): Promise<any[]> {
+  qi?: any,
+): Promise<any[]> {
   const domain =
     site.domain?.toLowerCase() ||
     (() => {
@@ -953,19 +1000,14 @@ async function fetchFromSite(site: any, intent: string): Promise<any[]> {
         return "";
       }
     })();
-
   console.log(`[scrape] → ${site.name} | ${domain}`);
 
   try {
-    // Structured free APIs
+    // Free structured APIs — always accurate
     if (domain.includes("alphavantage"))
       return await fetchFromAlphaVantage(intent);
     if (domain === "newsapi.org") return await fetchFromNewsAPI(intent);
-    if (
-      domain.includes("nasa.gov") ||
-      domain.includes("eonet.gsfc") ||
-      domain.includes("images-api.nasa")
-    )
+    if (domain.includes("nasa.gov") || domain.includes("eonet.gsfc"))
       return await fetchFromNASA(intent);
     if (domain.includes("semanticscholar.org"))
       return await fetchFromSemanticScholar(intent);
@@ -982,39 +1024,29 @@ async function fetchFromSite(site: any, intent: string): Promise<any[]> {
     if (domain.includes("reddit.com")) return await fetchFromReddit(intent);
     if (domain.includes("wikipedia.org"))
       return await fetchFromWikipedia(site.url, intent);
-
-    // CSV files
     if (
       site.url?.endsWith(".csv") ||
       domain.includes("raw.githubusercontent.com")
     )
       return await fetchFromCSV(site.url, site.name);
 
-    // Sites that always block scraping → use NewsAPI with source filter
-    const isBlockedDomain = BLOCKED_DOMAINS.some((d) => domain.includes(d));
-    if (isBlockedDomain) {
-      console.log(
-        `[scrape] ${site.name} is blocked domain, using NewsAPI fallback`,
-      );
+    // Blocked domains — use NewsAPI fallback
+    if (BLOCKED_DOMAINS.some((d) => domain.includes(d)))
       return await fetchFromNewsAPI(intent, site.name);
-    }
 
-    // News sites that block direct fetch → use NewsAPI
-    const isNewsDomain = NEWS_API_DOMAINS.some((d) => domain.includes(d));
-    if (isNewsDomain) {
-      console.log(`[scrape] ${site.name} is news domain, using NewsAPI`);
+    // News domains — use NewsAPI
+    if (NEWS_API_DOMAINS.some((d) => domain.includes(d)))
       return await fetchFromNewsAPI(intent, site.name);
-    }
 
-    // Try Firecrawl first for other sites
+    // Ecommerce / scraped sites — use Firecrawl WITH query intelligence
     if (FIRECRAWL_KEY) {
-      const fc = await fetchFromFirecrawl(site.url, intent, site.name);
+      const fc = await fetchFromFirecrawl(site.url, intent, site.name, qi);
       if (fc.length > 0) return fc;
     }
 
-    // Direct fetch fallback
+    // Direct fetch fallback with AI extraction + query intelligence
     const text = await safeFetch(site.url);
-    if (text) return await extractWithGroq(text, intent, site.name, site.url);
+    if (text) return await extractWithAI(text, intent, site.name, qi);
 
     return [];
   } catch (err: any) {
@@ -1023,22 +1055,37 @@ async function fetchFromSite(site: any, intent: string): Promise<any[]> {
   }
 }
 
-// ── POST ────────────────────────────────────────────────────────────
+// ── POST ──────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { userId } = auth();
     if (!userId)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { intent, selectedSites, queryCategory, subjectLine, displayType } =
-      await req.json();
+    // queryIntelligence is now passed from suggest route
+    const {
+      intent,
+      selectedSites,
+      queryCategory,
+      subjectLine,
+      displayType,
+      queryIntelligence,
+    } = await req.json();
     if (!intent?.trim())
       return NextResponse.json({ error: "Intent required" }, { status: 400 });
     if (!selectedSites?.length)
       return NextResponse.json({ error: "No sites selected" }, { status: 400 });
 
+    const qi = queryIntelligence; // may be undefined for old clients
+    console.log(
+      "[scrape] QI:",
+      qi?.refinedQuery || "none",
+      "| Exclude:",
+      qi?.extractionRules?.mustExclude?.join(",") || "none",
+    );
+
     const results = await Promise.allSettled(
-      selectedSites.map((site: any) => fetchFromSite(site, intent)),
+      selectedSites.map((site: any) => fetchFromSite(site, intent, qi)),
     );
 
     const allRecords: any[] = [],
@@ -1075,9 +1122,8 @@ export async function POST(req: NextRequest) {
             v !== undefined &&
             String(v).trim() &&
             String(v) !== "0"
-          ) {
+          )
             clean[k] = String(v);
-          }
         }
         return clean;
       })
@@ -1124,7 +1170,6 @@ export async function POST(req: NextRequest) {
                     ? "statistics"
                     : "general_news";
 
-    // Build rich raw text for AI analysis — actual content not metadata
     const fullRawText = allRecords
       .filter((r) => r.Abstract || r.Description || r.Content || r.Summary)
       .map(
@@ -1169,7 +1214,7 @@ export async function POST(req: NextRequest) {
           ).length,
         })),
         category: queryCategory,
-        subjectLine: subjectLine || intent,
+        subjectLine: subjectLine || qi?.subjectLine || intent,
         displayType: displayType || "mixed",
         sentiment: {
           overall:
@@ -1190,6 +1235,7 @@ export async function POST(req: NextRequest) {
         socialPosts: socialRecords,
         tabularData: tabularRecords,
         query: intent,
+        queryIntelligence: qi, // pass through for AIXPLORE context
         _fullRecords: allRecords,
       },
     });

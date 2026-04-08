@@ -3,7 +3,7 @@ import { WorkflowTask } from "@/types/workflow";
 import { Link2Icon, LucideProps, MousePointerClick } from "lucide-react";
 
 export const NavigateUrlTask = {
-  type: TaskType.NAVIGATE_TO_URL,
+  type: TaskType.NAVIGATE_URL,
   label: "Navigate Url",
   icon: (props) => <Link2Icon className="stroke-orange-400" {...props} />,
 

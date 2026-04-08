@@ -17,13 +17,14 @@ function ExecuteBtn({ workflowId }: { workflowId: string }) {
     mutationFn: async (data: { workflowId: string; flowDefinition?: string }) =>
       await RunWorkflow(data),
     onSuccess: () => {
-      toast.success("Execution stated", { id: "flow-execution" });
+      toast.success("Execution started", { id: "flow-execution" });
     },
     onError: (error) => {
-      console.log("error:", error);
+      console.error("Execution error:", error);
       toast.error("Something went wrong", { id: "flow-execution" });
     },
   });
+
   return (
     <Button
       variant={"outline"}
@@ -32,9 +33,10 @@ function ExecuteBtn({ workflowId }: { workflowId: string }) {
       onClick={() => {
         const plan = generate();
         if (!plan) {
-          //client side validation...!
+          // useExecutionPlan already showed the appropriate toast
           return;
         }
+        toast.loading("Starting execution...", { id: "flow-execution" });
         const flowdef = JSON.parse(JSON.stringify(toObject()));
         mutation.mutate({
           workflowId,

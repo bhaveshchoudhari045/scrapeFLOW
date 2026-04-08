@@ -226,6 +226,7 @@ export default function FlowScrapePage() {
         queryCategory: json.queryCategory,
         subjectLine: json.subjectLine,
         displayType: json.displayType,
+        queryIntelligence: json.queryIntelligence,
       });
     } catch (e: any) {
       toast.error(e.message);

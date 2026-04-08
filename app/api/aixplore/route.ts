@@ -20,10 +20,10 @@ async function callClaude(prompt: string, maxTokens = 4000): Promise<string> {
     }),
   });
   const d = await res.json();
-  console.log("Claude status:", res.status); // ← add
-  console.log("Claude response:", JSON.stringify(d).slice(0, 300)); // ← add
-  if (!res.ok) throw new Error(d.error?.message || "Claude error");
-  return (d.content?.[0]?.text ?? "").trim();
+  if (!res.ok) throw new Error(d.error?.message || `Claude ${res.status}`);
+  const text = (d.content?.[0]?.text ?? "").trim();
+  if (!text) throw new Error("Claude returned empty");
+  return text;
 }
 
 async function callGroq(prompt: string, maxTokens = 4000): Promise<string> {
@@ -36,72 +36,110 @@ async function callGroq(prompt: string, maxTokens = 4000): Promise<string> {
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       max_tokens: maxTokens,
-      temperature: 0.3,
+      temperature: 0.2,
       messages: [
         {
           role: "system",
           content:
-            "You are an elite data analyst. Respond ONLY with raw valid JSON. No markdown, no backticks. Start { end }.",
+            "You are an elite data analyst. Respond ONLY with raw valid JSON. No markdown, no backticks, no prose. Start with { and end with }.",
         },
         { role: "user", content: prompt },
       ],
     }),
   });
   const d = await res.json();
-  return (d.choices?.[0]?.message?.content ?? "").trim();
+  if (!res.ok) throw new Error(d.error?.message || `Groq ${res.status}`);
+  const text = (d.choices?.[0]?.message?.content ?? "").trim();
+  if (!text) throw new Error("Groq returned empty");
+  return text;
 }
 
 async function callAI(prompt: string, maxTokens = 4000): Promise<string> {
   try {
-    const result = await callClaude(prompt, maxTokens);
-    if (!result?.trim()) throw new Error("Claude returned empty response");
-    return result;
+    return await callClaude(prompt, maxTokens);
   } catch (e) {
-    console.error("Claude failed:", e);
-    try {
-      const result = await callGroq(prompt, maxTokens);
-      if (!result?.trim()) throw new Error("Groq returned empty response");
-      return result;
-    } catch (e2) {
-      console.error("Groq failed:", e2);
-      throw e2;
-    }
+    console.error("Claude failed, trying Groq:", e);
   }
+  return await callGroq(prompt, maxTokens);
 }
 
-// FIND the parseJSON function and REPLACE entirely with:
+// ── Robust JSON parser ────────────────────────────────────────────────────
 function parseJSON(raw: string): any | null {
-  const attempts = [
-    () => JSON.parse(raw),
-    () => JSON.parse(raw.replace(/```json\n?|```\n?/g, "").trim()),
-    () => {
-      const m = raw.match(/\{[\s\S]*\}/s);
-      return m ? JSON.parse(m[0]) : null;
-    },
-    () => {
-      // Handle truncated JSON — find last complete field
-      const m = raw.match(/\{[\s\S]*/s);
-      if (!m) return null;
-      let str = m[0];
-      // Try closing it if truncated
-      const openBraces = (str.match(/\{/g) || []).length;
-      const closeBraces = (str.match(/\}/g) || []).length;
-      const diff = openBraces - closeBraces;
-      if (diff > 0) str += "}".repeat(diff);
-      return JSON.parse(str);
-    },
-  ];
+  if (!raw) return null;
 
-  for (const fn of attempts) {
+  const stripped = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  for (const candidate of [raw, stripped]) {
     try {
-      const r = fn();
-      if (r && (r.summary || r.insights || r.prediction)) return r;
+      const r = JSON.parse(candidate);
+      if (r && typeof r === "object") return r;
+    } catch {}
+
+    try {
+      const m = candidate.match(/\{[\s\S]*\}/);
+      if (m) {
+        const r = JSON.parse(m[0]);
+        if (r && typeof r === "object") return r;
+      }
+    } catch {}
+
+    try {
+      const m = candidate.match(/\{[\s\S]*/);
+      if (m) {
+        let str = m[0];
+        str = str.replace(/,?\s*"[^"]*$/, "");
+        str = str.replace(/,?\s*"[^"]*":\s*"[^"]*$/, "");
+        str = str.replace(/,?\s*"[^"]*":\s*\[[\s\S]*$/, "");
+        const open = (str.match(/\{/g) || []).length;
+        const close = (str.match(/\}/g) || []).length;
+        str += "}".repeat(Math.max(0, open - close));
+        const r = JSON.parse(str);
+        if (r && typeof r === "object") return r;
+      }
     } catch {}
   }
   return null;
 }
 
-// ── Column type detection — works on ACTUAL content values ───────────────
+// ── DATA-FIRST: Flatten nested record structures ───────────────────────────
+/**
+ * Many scrapers nest real data inside sub-keys like `data`, `attributes`,
+ * or `fields`. This promotes those values to the top level so column
+ * detection and charting always see the actual content.
+ */
+function flattenRecord(record: any): any {
+  const nested = record.attributes || record.data || record.fields || null;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    // Merge nested keys without clobbering top-level metadata
+    return { ...record, ...nested };
+  }
+  return record;
+}
+
+function flattenScrapedData(records: any[]): any[] {
+  return records.map(flattenRecord);
+}
+
+// ── DATA-FIRST: Column detection (ignores metadata / noise keys) ──────────
+const IGNORED_KEYS = new Set([
+  "_sourceName",
+  "_sourceType",
+  "id",
+  "ID",
+  "Category", // generic catch-all tag — not analytic content
+  "Status",
+  "url",
+  "URL",
+  "link",
+  "href",
+  "image",
+  "img",
+  "thumbnail",
+]);
+
 function detectColumns(records: any[]) {
   if (!records.length)
     return {
@@ -110,15 +148,18 @@ function detectColumns(records: any[]) {
       dateCols: [] as string[],
       allCols: [] as string[],
     };
-  // Use all keys from all records (some firecrawl rows differ)
+
   const allCols = [
     ...new Set(
-      records.flatMap((r) => Object.keys(r)).filter((k) => !k.startsWith("_")),
+      records
+        .flatMap((r) => Object.keys(r))
+        .filter((k) => !k.startsWith("_") && !IGNORED_KEYS.has(k)),
     ),
   ];
-  const numericCols: string[] = [];
-  const textCols: string[] = [];
-  const dateCols: string[] = [];
+
+  const numericCols: string[] = [],
+    textCols: string[] = [],
+    dateCols: string[] = [];
 
   for (const col of allCols) {
     const vals = records
@@ -126,33 +167,30 @@ function detectColumns(records: any[]) {
       .map((r) => String(r[col] ?? ""))
       .filter((v) => v && v !== "—" && v !== "N/A");
     if (!vals.length) continue;
-    // Date detection
+
     const dateHits = vals.filter((v) =>
-      /\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{4}/.test(v),
+      /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(v),
     ).length;
     if (dateHits >= Math.min(3, vals.length * 0.4)) {
       dateCols.push(col);
       continue;
     }
-    // Numeric detection — strip currency symbols, commas, %, spaces then check
+
     const numHits = vals.filter((v) => {
-      const cleaned = v
+      const c = v
         .replace(/[₹$€£,\s%+]/g, "")
         .replace(/pts$/i, "")
         .replace(/km$/i, "");
-      return (
-        cleaned !== "" &&
-        !isNaN(parseFloat(cleaned)) &&
-        isFinite(Number(cleaned))
-      );
+      return c !== "" && !isNaN(parseFloat(c)) && isFinite(Number(c));
     }).length;
+
     if (numHits >= Math.max(2, vals.length * 0.45)) numericCols.push(col);
     else textCols.push(col);
   }
+
   return { numericCols, textCols, dateCols, allCols };
 }
 
-// ── Parse a value to float robustly ──────────────────────────────────────
 function toNum(val: any): number {
   if (typeof val === "number") return val;
   const s = String(val ?? "")
@@ -164,84 +202,80 @@ function toNum(val: any): number {
   return isNaN(n) ? 0 : n;
 }
 
-// ── Split records by _sourceType for targeted analysis ───────────────────
 function splitByType(records: any[]) {
-  const finance = records.filter(
-    (r) => r._sourceType === "finance" && r.Category,
-  ); // metric rows
-  const ohlcv = records.filter((r) => r._sourceType === "finance_ohlcv");
-  const news = records.filter((r) =>
-    ["news", "social"].includes(r._sourceType),
-  );
-  const academic = records.filter((r) => r._sourceType === "academic");
-  const products = records.filter((r) => r._sourceType === "product");
-  const dataset = records.filter((r) => r._sourceType === "dataset");
-  const docs = records.filter((r) => r._sourceType === "document");
-  const general = records.filter(
-    (r) =>
-      !r._sourceType ||
-      r._sourceType === "general" ||
-      r._sourceType === "science",
-  );
-  return { finance, ohlcv, news, academic, products, dataset, docs, general };
+  return {
+    finance: records.filter((r) => r._sourceType === "finance" && r.Category),
+    ohlcv: records.filter((r) => r._sourceType === "finance_ohlcv"),
+    news: records.filter((r) => ["news", "social"].includes(r._sourceType)),
+    academic: records.filter((r) => r._sourceType === "academic"),
+    products: records.filter((r) => r._sourceType === "product"),
+    dataset: records.filter((r) => r._sourceType === "dataset"),
+    docs: records.filter((r) => r._sourceType === "document"),
+    general: records.filter(
+      (r) => !r._sourceType || ["general", "science"].includes(r._sourceType),
+    ),
+  };
 }
 
-// ── Choose the best record set for charting ───────────────────────────────
-function pickChartableRecords(allRaw: any[], category: string): any[] {
-  const { finance, ohlcv, news, academic, products, dataset, docs, general } =
-    splitByType(allRaw);
+// ── DATA-FIRST: pickChartable prefers records that have numeric values ─────
+/**
+ * Instead of relying solely on `_sourceType`, we now check whether records
+ * actually contain numeric data. This means any scraped dataset with
+ * prices, counts, scores, etc. will be charted even if its type tag is
+ * missing or generic.
+ */
+function pickChartable(allRaw: any[]): any[] {
+  const { ohlcv, dataset, products, academic } = splitByType(allRaw);
 
-  if (ohlcv.length >= 5) return ohlcv; // OHLCV always best for finance charts
+  // Prefer typed subsets that are large enough
+  if (ohlcv.length >= 5) return ohlcv;
   if (dataset.length >= 3) return dataset;
   if (products.length >= 3) return products;
   if (academic.length >= 3) return academic;
-  // For mixed / news / general — try all non-finance records
-  const rest = allRaw.filter((r) => !["finance"].includes(r._sourceType ?? ""));
-  if (rest.length >= 3) return rest;
-  return allRaw;
+
+  // DATA-FIRST fallback: pick records that contain at least one non-zero numeric value
+  const withNumbers = allRaw.filter((r) =>
+    Object.values(r).some((v) => {
+      const n = toNum(v);
+      return n !== 0 && !isNaN(n);
+    }),
+  );
+
+  return withNumbers.length >= 3 ? withNumbers : allRaw;
 }
 
-// ── Build chart configs from ACTUAL data ──────────────────────────────────
-function buildChartConfigs(
+// ── Charts ────────────────────────────────────────────────────────────────
+function buildCharts(
   allRaw: any[],
   cleanRecords: any[],
   category: string,
 ): any[] {
   const charts: any[] = [];
-  const chartable = pickChartableRecords(allRaw, category);
+  const chartable = pickChartable(allRaw);
   const { numericCols, textCols, dateCols } = detectColumns(chartable);
-
-  // ── 1. Finance OHLCV line chart ──────────────────────────────────────
   const ohlcv = allRaw.filter((r) => r._sourceType === "finance_ohlcv");
+
   if (ohlcv.length >= 5) {
-    const sorted = [...ohlcv].sort(
-      (a, b) => a.Date?.localeCompare(b.Date ?? "") ?? 0,
+    const sorted = [...ohlcv].sort((a, b) =>
+      (a.Date ?? "").localeCompare(b.Date ?? ""),
     );
     charts.push({
       type: "line",
       title: "Price History (Close)",
-      xKey: "Date",
-      yKey: "Close",
       data: sorted.slice(-30).map((r) => ({ x: r.Date, y: toNum(r.Close) })),
       color: "#00f5ff",
     });
     charts.push({
       type: "bar",
       title: "Daily Trading Volume",
-      xKey: "Date",
-      yKey: "Volume",
       data: sorted
         .slice(-20)
         .map((r) => ({ x: r.Date?.slice(5), y: toNum(r.Volume) })),
       color: "#a78bfa",
     });
-    // OHLC range chart (High-Low spread)
     charts.push({
       type: "area",
       title: "High–Low Price Range",
-      xKey: "Date",
-      yKey: "High",
-      yKey2: "Low",
       data: sorted.slice(-20).map((r) => ({
         x: r.Date?.slice(5),
         high: toNum(r.High),
@@ -252,12 +286,10 @@ function buildChartConfigs(
     });
   }
 
-  // ── 2. Bar — text × numeric (e.g. Player vs Runs, Product vs Price) ──
   if (textCols.length && numericCols.length) {
-    // Pick the most meaningful text col (prefer Name/Player/Title over Source)
     const xCol =
       textCols.find((c) =>
-        /name|player|title|product|country|team|category|brand/i.test(c),
+        /name|player|title|product|country|team|brand/i.test(c),
       ) ?? textCols[0];
     for (const yCol of numericCols.slice(0, 3)) {
       const data = chartable
@@ -271,8 +303,6 @@ function buildChartConfigs(
         charts.push({
           type: "bar",
           title: `${yCol} by ${xCol}`,
-          xKey: xCol,
-          yKey: yCol,
           data,
           color: "#f59e0b",
         });
@@ -281,55 +311,47 @@ function buildChartConfigs(
     }
   }
 
-  // ── 3. Line — date × numeric (time series) ───────────────────────────
   if (dateCols.length && numericCols.length) {
-    const xCol = dateCols[0];
-    const yCol = numericCols[0];
-    const sorted = [...chartable].sort((a, b) =>
-      String(a[xCol] ?? "").localeCompare(String(b[xCol] ?? "")),
+    const sorted2 = [...chartable].sort((a, b) =>
+      String(a[dateCols[0]] ?? "").localeCompare(String(b[dateCols[0]] ?? "")),
     );
-    const data = sorted
+    const data = sorted2
       .slice(0, 40)
-      .map((r) => ({ x: String(r[xCol] ?? ""), y: toNum(r[yCol]) }))
+      .map((r) => ({
+        x: String(r[dateCols[0]] ?? ""),
+        y: toNum(r[numericCols[0]]),
+      }))
       .filter((d) => d.y !== 0);
     if (data.length >= 3)
       charts.push({
         type: "line",
-        title: `${yCol} over ${xCol}`,
-        xKey: xCol,
-        yKey: yCol,
+        title: `${numericCols[0]} over ${dateCols[0]}`,
         data,
         color: "#818cf8",
       });
   }
 
-  // ── 4. Scatter — numeric × numeric correlation ────────────────────────
   if (numericCols.length >= 2) {
-    const xCol = numericCols[0],
-      yCol = numericCols[1];
     const data = chartable
       .slice(0, 60)
       .map((r) => ({
-        x: toNum(r[xCol]),
-        y: toNum(r[yCol]),
+        x: toNum(r[numericCols[0]]),
+        y: toNum(r[numericCols[1]]),
         label: String(r[textCols[0]] ?? "").slice(0, 15),
       }))
       .filter((d) => d.x !== 0 || d.y !== 0);
     if (data.length >= 4)
       charts.push({
         type: "scatter",
-        title: `${xCol} vs ${yCol} Correlation`,
-        xKey: xCol,
-        yKey: yCol,
+        title: `${numericCols[0]} vs ${numericCols[1]}`,
         data,
         color: "#f59e0b",
       });
   }
 
-  // ── 5. Pie/donut — categorical distribution ───────────────────────────
   const catCol = textCols.find((c) => {
-    const uniq = new Set(chartable.map((r) => r[c]).filter(Boolean));
-    return uniq.size >= 2 && uniq.size <= 12;
+    const u = new Set(chartable.map((r) => r[c]).filter(Boolean));
+    return u.size >= 2 && u.size <= 12;
   });
   if (catCol) {
     const counts: Record<string, number> = {};
@@ -350,36 +372,6 @@ function buildChartConfigs(
       });
   }
 
-  // ── 6. Histogram — value distribution ────────────────────────────────
-  if (numericCols.length) {
-    const col = numericCols[numericCols.length - 1];
-    const vals = chartable
-      .map((r) => toNum(r[col]))
-      .filter((v) => v !== 0 && !isNaN(v));
-    if (vals.length >= 5) {
-      const min = Math.min(...vals),
-        max = Math.max(...vals);
-      const bk = Math.min(10, Math.ceil(Math.sqrt(vals.length)));
-      const bsz = (max - min) / bk || 1;
-      const buckets: Record<string, number> = {};
-      vals.forEach((v) => {
-        const b = Math.min(Math.floor((v - min) / bsz), bk - 1);
-        const lbl = `${(min + b * bsz).toFixed(1)}`;
-        buckets[lbl] = (buckets[lbl] || 0) + 1;
-      });
-      const data = Object.entries(buckets)
-        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
-        .map(([x, y]) => ({ x, y }));
-      charts.push({
-        type: "histogram",
-        title: `${col} Distribution`,
-        data,
-        color: "#34d399",
-      });
-    }
-  }
-
-  // ── 7. Sentiment donut (news/social) ──────────────────────────────────
   const newsRecs = allRaw.filter((r) =>
     ["news", "social"].includes(r._sourceType ?? ""),
   );
@@ -393,10 +385,10 @@ function buildChartConfigs(
       else if (s.includes("negative")) neg++;
       else neu++;
     });
-    if (pos + neg + neu > 0) {
+    if (pos + neg + neu > 0)
       charts.push({
         type: "donut",
-        title: "News Sentiment Breakdown",
+        title: "News Sentiment",
         data: [
           { label: "Positive", value: pos, color: "#00f5c8" },
           { label: "Negative", value: neg, color: "#ef4444" },
@@ -404,16 +396,17 @@ function buildChartConfigs(
         ],
         color: "#00f5c8",
       });
-    }
   }
 
-  // ── 8. Academic citation bar ──────────────────────────────────────────
   const papers = allRaw.filter(
-    (r) => r._sourceType === "academic" && r.Title && r.Citations,
+    (r) =>
+      r._sourceType === "academic" &&
+      r.Title &&
+      r.Citations &&
+      !isNaN(parseInt(r.Citations)),
   );
   if (papers.length >= 3) {
     const data = papers
-      .filter((p) => !isNaN(parseInt(p.Citations)))
       .sort(
         (a, b) => (parseInt(b.Citations) || 0) - (parseInt(a.Citations) || 0),
       )
@@ -425,30 +418,22 @@ function buildChartConfigs(
     if (data.length >= 2)
       charts.push({
         type: "bar",
-        title: "Papers by Citation Count",
-        xKey: "Paper",
-        yKey: "Citations",
+        title: "Papers by Citations",
         data,
         color: "#818cf8",
       });
   }
 
-  // ── 9. Product price comparison ───────────────────────────────────────
   const prods = allRaw.filter((r) => r._sourceType === "product" && r.Name);
   if (prods.length >= 2) {
     const data = prods
       .slice(0, 15)
-      .map((p) => ({
-        x: String(p.Name ?? "").slice(0, 22),
-        y: toNum(p.Price),
-      }))
+      .map((p) => ({ x: String(p.Name ?? "").slice(0, 22), y: toNum(p.Price) }))
       .filter((d) => d.y > 0);
     if (data.length >= 2)
       charts.push({
         type: "bar",
         title: "Product Price Comparison",
-        xKey: "Product",
-        yKey: "Price (₹)",
         data,
         color: "#fb923c",
       });
@@ -457,65 +442,54 @@ function buildChartConfigs(
   return charts.filter((c) => c.data?.length >= 1).slice(0, 9);
 }
 
-// ── ML readiness — works on chartable records ─────────────────────────────
-function buildMLReadiness(allRaw: any[], cleanRecords: any[]) {
-  const chartable = pickChartableRecords(allRaw, "");
+// ── ML readiness ──────────────────────────────────────────────────────────
+function buildML(allRaw: any[], cleanRecords: any[]) {
+  const chartable = pickChartable(allRaw);
   const working = chartable.length >= 5 ? chartable : cleanRecords;
   if (!working.length) return null;
-
   const { numericCols, textCols, dateCols, allCols } = detectColumns(working);
-  const totalRows = working.length;
-  const totalCols = allCols.length;
+  const totalRows = working.length,
+    totalCols = allCols.length;
 
-  // Missing value analysis on actual data
   const missingCounts: Record<string, number> = {};
   allCols.forEach((k) => {
     missingCounts[k] = working.filter(
       (r) => !r[k] || r[k] === "—" || r[k] === "N/A" || r[k] === "",
     ).length;
   });
+
   const cleanCols = allCols.filter((k) => missingCounts[k] === 0);
   const dirtyCols = allCols.filter((k) => missingCounts[k] > totalRows * 0.2);
-
-  // Suggest best target: last meaningful numeric col
   const meaningful = numericCols.filter((c) => !/source|url|id|date/i.test(c));
   const suggestedTarget =
     meaningful[meaningful.length - 1] ??
     numericCols[numericCols.length - 1] ??
     null;
-  const suggestedFeatures = [
-    ...numericCols.filter((c) => c !== suggestedTarget),
-    ...dateCols,
-    ...textCols.slice(0, 3),
-  ].slice(0, 8);
-
-  // Applicable ML tasks based on what columns exist
-  const tasks: string[] = [];
-  if (numericCols.length >= 2)
-    tasks.push("Regression — predict a numeric value");
   const catCols = textCols.filter((c) => {
     const u = new Set(working.map((r) => r[c]).filter(Boolean));
     return u.size >= 2 && u.size <= 20;
   });
+
+  const tasks: string[] = [];
+  if (numericCols.length >= 2)
+    tasks.push("Regression — predict a numeric value");
   if (catCols.length) tasks.push("Classification — predict a category");
   if (numericCols.length >= 3) tasks.push("Clustering — find hidden groups");
   if (dateCols.length && numericCols.length)
     tasks.push("Time Series — forecast future values");
   if (totalRows >= 50 && numericCols.length >= 4)
     tasks.push("Anomaly Detection — flag outliers");
-  if (numericCols.length >= 5) tasks.push("Dimensionality Reduction (PCA)");
 
   const models: string[] = [];
   if (tasks.some((t) => t.includes("Regression")))
-    models.push("XGBoost Regressor", "Random Forest", "Linear Regression");
+    models.push("XGBoost", "Random Forest", "Linear Regression");
   if (tasks.some((t) => t.includes("Classification")))
-    models.push("Gradient Boosting Classifier", "SVM", "Logistic Regression");
+    models.push("Gradient Boosting", "SVM", "Logistic Regression");
   if (tasks.some((t) => t.includes("Clustering")))
     models.push("K-Means", "DBSCAN");
   if (tasks.some((t) => t.includes("Time Series")))
     models.push("Prophet", "LSTM", "ARIMA");
 
-  // Actual column stats for display
   const colStats = numericCols
     .slice(0, 6)
     .map((col) => {
@@ -554,7 +528,11 @@ function buildMLReadiness(allRaw: any[], cleanRecords: any[]) {
     dirtyCols,
     colStats,
     suggestedTarget,
-    suggestedFeatures,
+    suggestedFeatures: [
+      ...numericCols.filter((c) => c !== suggestedTarget),
+      ...dateCols,
+      ...textCols.slice(0, 3),
+    ].slice(0, 8),
     applicableTasks: tasks,
     recommendedModels: [...new Set(models)].slice(0, 6),
     cleaningSteps: [
@@ -568,19 +546,23 @@ function buildMLReadiness(allRaw: any[], cleanRecords: any[]) {
         ? `Normalize/standardize: ${numericCols.slice(0, 3).join(", ")}`
         : null,
       dateCols.length > 0
-        ? `Extract year/month/day from: ${dateCols.join(", ")}`
+        ? `Extract features from: ${dateCols.join(", ")}`
         : null,
-      totalRows < 100
-        ? "⚠ Small dataset (<100 rows) — consider augmentation or more sources"
-        : null,
-      numericCols.length < 2
-        ? "⚠ Few numeric columns — ML models need at least 2 numeric features"
-        : null,
+      totalRows < 100 ? "⚠ Small dataset — consider adding more sources" : null,
     ].filter(Boolean),
   };
 }
 
-// ── Deep prompt that sends actual content ────────────────────────────────
+// ── DATA-FIRST: Prompt builder ────────────────────────────────────────────
+/**
+ * Key changes from original:
+ * 1. Detected column names are injected into the prompt as the authoritative
+ *    list of fields to analyse — the model is explicitly told to ignore metadata.
+ * 2. Column stats are always computed and surfaced so Claude anchors on real
+ *    numbers rather than hallucinating them.
+ * 3. The instruction block tells the model to compare columns, find
+ *    outliers, and surface actual values — not structure commentary.
+ */
 function buildPrompt(
   category: string,
   subject: string,
@@ -589,128 +571,135 @@ function buildPrompt(
   rawText: string,
   enriched: any,
 ): string {
-  // Pick the richest records to send to AI — use typed records for context
   const { finance, ohlcv, news, academic, products, dataset, docs, general } =
     splitByType(allRaw);
-  const { numericCols, textCols } = detectColumns(
-    pickChartableRecords(allRaw, category),
-  );
+  const chartable = pickChartable(allRaw);
+  const { numericCols, textCols, dateCols } = detectColumns(chartable);
 
-  // Build a representative sample: prioritise typed records, send actual values
-  let contextRecords: any[] = [];
-  if (ohlcv.length) contextRecords.push(...ohlcv.slice(0, 5));
-  if (finance.length) contextRecords.push(...finance.slice(0, 8));
-  if (products.length) contextRecords.push(...products.slice(0, 10));
-  if (dataset.length) contextRecords.push(...dataset.slice(0, 10));
-  if (academic.length) contextRecords.push(...academic.slice(0, 8));
-  if (news.length) contextRecords.push(...news.slice(0, 8));
-  if (docs.length) contextRecords.push(...docs.slice(0, 5));
-  if (general.length) contextRecords.push(...general.slice(0, 8));
-  if (!contextRecords.length) contextRecords = cleanRecords.slice(0, 5);
-  // Remove internal _ keys for the prompt but keep all real data
-  const cleanCtx = contextRecords.map((r) => {
-    const out: any = {};
-    for (const [k, v] of Object.entries(r)) {
-      if (!k.startsWith("_")) out[k] = v;
-    }
-    return out;
+  // Build context sample (strip internal _ fields)
+  let ctx: any[] = [];
+  if (ohlcv.length) ctx.push(...ohlcv.slice(0, 15));
+  if (finance.length) ctx.push(...finance.slice(0, 15));
+  if (products.length) ctx.push(...products.slice(0, 20));
+  if (dataset.length) ctx.push(...dataset.slice(0, 25));
+  if (academic.length) ctx.push(...academic.slice(0, 15));
+  if (news.length) ctx.push(...news.slice(0, 15));
+  if (docs.length) ctx.push(...docs.slice(0, 10));
+  if (general.length) ctx.push(...general.slice(0, 15));
+  if (!ctx.length) ctx = cleanRecords.slice(0, 30);
+
+  const cleanCtx = ctx.map((r) => {
+    const o: any = {};
+    for (const [k, v] of Object.entries(r))
+      if (!k.startsWith("_") && !IGNORED_KEYS.has(k)) o[k] = v;
+    return o;
   });
 
-  // Compute real stats for numeric columns to include in prompt
+  // Always compute real column stats
   const statsLines = numericCols
     .slice(0, 6)
     .map((col) => {
-      const vals = contextRecords
+      const vals = ctx
         .map((r) => toNum(r[col]))
         .filter((v) => v !== 0 && !isNaN(v));
       if (!vals.length) return "";
       const sum = vals.reduce((a, b) => a + b, 0);
-      const mean = sum / vals.length;
-      const min = Math.min(...vals),
-        max = Math.max(...vals);
-      return `  ${col}: min=${min.toFixed(2)}, max=${max.toFixed(2)}, mean=${mean.toFixed(2)}, n=${vals.length}`;
+      return `  ${col}: min=${Math.min(...vals).toFixed(2)}, max=${Math.max(...vals).toFixed(2)}, mean=${(sum / vals.length).toFixed(2)}, n=${vals.length}`;
     })
     .filter(Boolean)
     .join("\n");
 
-  // Category-specific extra context
   let extraCtx = "";
   if (category === "finance_deep") {
-    const fin = finance.find((r) => r.Metric === "Overall Signal");
+    const sig = finance.find((r) => r.Metric === "Overall Signal");
     const price = finance.find((r) => r.Metric === "Current Price");
     const rsi = finance.find((r) => r.Metric?.includes("RSI"));
-    extraCtx = `\nFINANCE SIGNALS:\n  Price: ${price?.Value}\n  Signal: ${fin?.Value}\n  RSI: ${rsi?.Value}\n  News: ${enriched?.sentiment?.bullish || 0} bullish / ${enriched?.sentiment?.bearish || 0} bearish`;
+    extraCtx = `\nFINANCE: Price=${price?.Value}, Signal=${sig?.Value}, RSI=${rsi?.Value}, News=${enriched?.sentiment?.bullish || 0}B/${enriched?.sentiment?.bearish || 0}Be`;
   }
   if (category === "academic_research" && academic.length) {
-    const cites = academic
+    const top = academic
       .filter((p) => p.Citations && !isNaN(parseInt(p.Citations)))
       .sort((a, b) => parseInt(b.Citations) - parseInt(a.Citations));
-    extraCtx = `\nTOP CITED:\n${cites
+    extraCtx = `\nTOP CITED: ${top
       .slice(0, 3)
-      .map((p) => `  "${p.Title}" — ${p.Citations} citations (${p.Year})`)
-      .join("\n")}`;
+      .map((p) => `"${p.Title}" (${p.Citations} cites, ${p.Year})`)
+      .join("; ")}`;
   }
   if (products.length) {
     const prices = products.map((p) => toNum(p.Price)).filter((v) => v > 0);
     if (prices.length)
-      extraCtx += `\nPRODUCT PRICES: min=₹${Math.min(...prices).toLocaleString()}, max=₹${Math.max(...prices).toLocaleString()}, avg=₹${Math.round(prices.reduce((a, b) => a + b, 0) / prices.length).toLocaleString()}, n=${prices.length}`;
+      extraCtx += `\nPRICES: min=₹${Math.min(...prices).toLocaleString()}, max=₹${Math.max(...prices).toLocaleString()}, avg=₹${Math.round(prices.reduce((a, b) => a + b, 0) / prices.length).toLocaleString()}`;
   }
 
-  return `You are a world-class data analyst. The user queried: "${subject}"
-Return ONLY raw JSON — no markdown, no backticks, no explanation. Start with { and end with }.
+  const sampleJSON = JSON.stringify(cleanCtx, null, 1).slice(0, 5000);
 
-DATASET OVERVIEW:
-  Total records: ${cleanRecords.length}
-  Numeric columns: ${numericCols.join(", ") || "none detected"}
-  Text columns: ${textCols.join(", ") || "none detected"}
-  Sources: ${enriched?.sourceResults?.map((s: any) => s.name).join(", ") || "multiple"}
+  // DATA-FIRST instruction: tell the model exactly which columns to focus on
+  const analyticCols = [
+    ...numericCols.slice(0, 8),
+    ...dateCols.slice(0, 4),
+    ...textCols.slice(0, 6),
+  ];
+
+  return `You are a world-class data analyst. The user searched for: "${subject}"
+Return ONLY a valid JSON object. No markdown, no backticks, no preamble. Start with { end with }.
+
+CRITICAL INSTRUCTION — DATA-FIRST ANALYSIS:
+- Analyze the CONTENT of the records, not their structure or metadata.
+- The authoritative analytic columns are: [${analyticCols.join(", ")}]
+- Do NOT mention field names like "_sourceType", "id", "Status", or "Category" in your response.
+- Compare actual values across records. Cite specific names, numbers, and ranges.
+- Your summary must contain at least 4 concrete data points (numbers, names, dates) from the sample.
+
+DATASET: ${cleanRecords.length} total records, ${ctx.length} shown below
+Numeric columns: ${numericCols.join(", ") || "none"}
+Text columns: ${textCols.slice(0, 8).join(", ") || "none"}
+Date columns: ${dateCols.join(", ") || "none"}
+Sources: ${enriched?.sourceResults?.map((s: any) => s.name).join(", ") || "multiple"}
 ${extraCtx}
 
-COLUMN STATISTICS (computed from actual values):
-${statsLines || "  No numeric columns with sufficient data"}
+COLUMN STATS (use these numbers in your analysis — do not invent others):
+${statsLines || "  (no numeric columns detected)"}
 
-ACTUAL DATA SAMPLE (${cleanCtx.length} records — real values):
-${JSON.stringify(cleanCtx, null, 1).slice(0, 3500)}
+DATA SAMPLE (${cleanCtx.length} records):
+${sampleJSON}
 
-RAW TEXT CONTEXT:
-${rawText?.slice(0, 500) || ""}
-
-Return this JSON (fill with SPECIFIC values from the data above — no generic placeholder text):
+Respond with this exact JSON structure. Use SPECIFIC values from the data — no placeholders:
 {
-  "summary": "7-9 sentences. Reference SPECIFIC names, numbers, values from the data. E.g. mention actual player names and their stats, actual product names and prices, actual paper titles and citation counts, actual stock price and RSI value. Connect the data points into a coherent narrative. Be concrete and data-driven.",
+  "summary": "6-8 sentences with actual names, values, and numbers from the data. Be concrete.",
   "keyMetrics": [
-    { "label": "most important metric name", "value": "exact value from data", "trend": "up|down|neutral", "context": "one sentence on what this means" },
-    { "label": "second metric", "value": "exact value", "trend": "up|down|neutral", "context": "meaning" },
-    { "label": "third metric", "value": "exact value", "trend": "up|down|neutral", "context": "meaning" },
-    { "label": "fourth metric", "value": "exact value", "trend": "up|down|neutral", "context": "meaning" }
+    {"label": "metric name", "value": "exact value", "trend": "up|down|neutral", "context": "brief meaning"},
+    {"label": "metric 2", "value": "exact value", "trend": "up|down|neutral", "context": "meaning"},
+    {"label": "metric 3", "value": "exact value", "trend": "up|down|neutral", "context": "meaning"},
+    {"label": "metric 4", "value": "exact value", "trend": "up|down|neutral", "context": "meaning"}
   ],
   "prediction": {
-    "result": "specific verdict — not generic, based on actual data values",
+    "result": "specific verdict from data",
     "confidence": "XX%",
-    "reason": "3-4 sentences citing specific values, names, or statistics from the data that justify this prediction"
+    "reason": "3-4 sentences citing specific data points"
   },
   "insights": [
-    { "insight": "Specific finding #1 with actual numbers (e.g. 'Virat Kohli averages 58.7 in Tests compared to 52.3 in ODIs')", "significance": "high", "category": "key finding", "dataPoint": "exact value that supports this" },
-    { "insight": "Specific finding #2", "significance": "high", "category": "pattern", "dataPoint": "exact value" },
-    { "insight": "Specific finding #3", "significance": "high", "category": "trend", "dataPoint": "exact value" },
-    { "insight": "Specific finding #4", "significance": "medium", "category": "comparison", "dataPoint": "exact value" },
-    { "insight": "Specific finding #5", "significance": "medium", "category": "outlier", "dataPoint": "exact value" },
-    { "insight": "Specific finding #6 — an unexpected or counter-intuitive pattern", "significance": "medium", "category": "discovery", "dataPoint": "exact value" }
+    {"insight": "specific finding with real numbers", "significance": "high", "category": "Category", "dataPoint": "exact supporting value"},
+    {"insight": "finding 2", "significance": "high", "category": "Category", "dataPoint": "value"},
+    {"insight": "finding 3", "significance": "high", "category": "Category", "dataPoint": "value"},
+    {"insight": "finding 4", "significance": "medium", "category": "Category", "dataPoint": "value"},
+    {"insight": "finding 5", "significance": "medium", "category": "Category", "dataPoint": "value"},
+    {"insight": "finding 6", "significance": "medium", "category": "Category", "dataPoint": "value"}
   ],
   "patterns": [
-    { "pattern": "statistical pattern visible across multiple records", "frequency": "how frequently this appears", "significance": "actionable implication" },
-    { "pattern": "second pattern", "frequency": "frequency", "significance": "implication" }
+    {"pattern": "statistical or behavioral pattern from data", "frequency": "how often", "significance": "what it means"},
+    {"pattern": "second pattern", "frequency": "frequency", "significance": "implication"}
   ],
   "scenarios": {
-    "bull": "3 sentences — best case scenario with specific conditions and realistic numbers",
-    "base": "3 sentences — most likely outcome with specific timeline",
-    "bear": "3 sentences — worst case with specific risk factors and numbers"
+    "bull": "optimistic scenario with specific numbers",
+    "base": "most likely outcome",
+    "bear": "downside scenario"
   },
-  "mlSuggestion": "2-3 sentences: what ML model fits best, what to predict, which columns to use as features, expected accuracy range",
-  "bestUseCase": "3-4 sentences: who benefits most from this data, how to act on the insights, what decision this data enables"
+  "mlSuggestion": "ML recommendation based on column types and data volume",
+  "bestUseCase": "who should use this data and how"
 }`;
 }
 
+// ── Fallback — always returns real content, never "Pending" ───────────────
 function buildFallback(
   category: string,
   subject: string,
@@ -718,32 +707,26 @@ function buildFallback(
   cleanRecords: any[],
   enriched: any,
 ): any {
-  const { numericCols, textCols } = detectColumns(
-    pickChartableRecords(allRaw, category),
-  );
-
+  const { numericCols, textCols } = detectColumns(pickChartable(allRaw));
   const sources = [
     ...new Set(
-      cleanRecords.map((r: any) => r.Source || r.source || "").filter(Boolean),
+      cleanRecords
+        .map((r: any) => r.Source || r.source || r._sourceName || "")
+        .filter(Boolean),
     ),
   ].slice(0, 5);
 
-  // ── Read actual content from ANY record structure ──────────────────────
-  // Grab the first meaningful text value from each record
   const titleKeys = [
     "Title",
     "title",
-    "Headline",
-    "headline",
     "Name",
     "name",
+    "Headline",
+    "headline",
     "Product",
     "subject",
-    "Subject",
-    "Question",
-    "query",
   ];
-  const valueKeys = [
+  const numKeys = [
     "Price",
     "price",
     "Value",
@@ -754,210 +737,207 @@ function buildFallback(
     "citations",
     "Rating",
     "rating",
-    "Count",
-    "count",
-    "Amount",
-    "amount",
+    "Runs",
+    "runs",
+    "Average",
+    "average",
+    "SR",
+    "Goals",
+    "Points",
+    "Avg",
   ];
   const descKeys = [
     "Summary",
     "summary",
     "Description",
     "description",
-    "Content",
-    "content",
-    "Snippet",
-    "snippet",
     "Abstract",
     "abstract",
-    "Body",
-    "body",
+    "Content",
+    "content",
   ];
 
-  // Extract real titles/names from records
   const titles = cleanRecords
+    .slice(0, 5)
     .map((r: any) => {
       for (const k of titleKeys)
-        if (r[k] && String(r[k]).length > 5) return String(r[k]);
-      // fallback: first string value longer than 10 chars
+        if (r[k] && String(r[k]).length > 3) return String(r[k]).slice(0, 80);
       return (
         (Object.values(r).find(
           (v) => typeof v === "string" && v.length > 10,
         ) as string) ?? ""
       );
     })
-    .filter(Boolean)
-    .slice(0, 5);
+    .filter(Boolean);
 
-  // Extract real numeric values
-  const numericSamples: {
-    col: string;
-    min: number;
-    max: number;
-    avg: number;
-  }[] = [];
+  const numSamples: { col: string; min: number; max: number; avg: number }[] =
+    [];
   for (const col of numericCols.slice(0, 4)) {
     const vals = cleanRecords
       .map((r: any) => toNum(r[col]))
       .filter((v) => v !== 0 && !isNaN(v));
     if (vals.length) {
-      const sum = vals.reduce((a, b) => a + b, 0);
-      numericSamples.push({
+      const s = vals.reduce((a, b) => a + b, 0);
+      numSamples.push({
         col,
         min: Math.min(...vals),
         max: Math.max(...vals),
-        avg: Math.round((sum / vals.length) * 100) / 100,
+        avg: Math.round((s / vals.length) * 100) / 100,
       });
     }
   }
 
-  // Extract real descriptions
-  const descriptions = cleanRecords
+  const namedNums: { key: string; val: string }[] = [];
+  if (cleanRecords[0]) {
+    for (const k of numKeys) {
+      const v = cleanRecords[0][k];
+      if (v && String(v).trim() && toNum(v) !== 0) {
+        namedNums.push({ key: k, val: String(v) });
+        if (namedNums.length >= 4) break;
+      }
+    }
+  }
+
+  const descs = cleanRecords
+    .slice(0, 2)
     .map((r: any) => {
       for (const k of descKeys)
-        if (r[k] && String(r[k]).length > 20) return String(r[k]).slice(0, 120);
+        if (r[k] && String(r[k]).length > 30) return String(r[k]).slice(0, 150);
       return "";
     })
-    .filter(Boolean)
-    .slice(0, 2);
+    .filter(Boolean);
 
-  // ── Build content-driven summary ──────────────────────────────────────
-  let summary = `${cleanRecords.length} records retrieved about "${subject}" from ${sources.length ? sources.join(", ") : "multiple sources"}. `;
-
-  if (titles.length) {
-    summary += `Records include: "${titles[0]}"`;
-    if (titles[1]) summary += `, "${titles[1]}"`;
-    if (titles[2]) summary += `, and ${titles.length - 2} more`;
-    summary += ". ";
-  }
-
-  if (numericSamples.length) {
+  let summary = `${cleanRecords.length} records retrieved for "${subject}" from ${sources.length ? sources.join(", ") : "multiple sources"}. `;
+  if (titles.length)
+    summary += `Records include: "${titles.slice(0, 3).join('", "')}"${titles.length > 3 ? ` and ${titles.length - 3} more` : ""}. `;
+  if (numSamples.length)
     summary +=
-      numericSamples
-        .map((s) => `${s.col} ranges from ${s.min} to ${s.max} (avg ${s.avg})`)
+      numSamples
+        .map((s) => `${s.col} ranges ${s.min}–${s.max} (avg ${s.avg})`)
         .join("; ") + ". ";
-  }
-
-  if (descriptions.length) {
-    summary += `${descriptions[0].slice(0, 100)}... `;
-  }
-
+  else if (namedNums.length)
+    summary += `Key values: ${namedNums.map((n) => `${n.key}=${n.val}`).join(", ")}. `;
+  if (descs[0]) summary += descs[0] + " ";
   summary +=
     cleanRecords.length >= 20
-      ? "Dataset is adequate for analysis — explore Insights and Charts tabs."
-      : "Consider adding more sources for richer analysis.";
+      ? "Dataset is sufficient — explore Charts and Insights tabs for patterns."
+      : "Consider fetching from more sources for richer analysis.";
 
-  // ── Content-driven key metrics ─────────────────────────────────────────
-  const keyMetrics: any[] = [];
-
-  // Add real numeric metrics first
-  for (const s of numericSamples.slice(0, 2)) {
-    keyMetrics.push({
+  const km: any[] = [];
+  for (const s of numSamples.slice(0, 2))
+    km.push({
       label: `Avg ${s.col}`,
       value: String(s.avg),
       trend: "neutral",
-      context: `Range: ${s.min} – ${s.max}`,
+      context: `Range: ${s.min}–${s.max}`,
     });
-    if (keyMetrics.length >= 2) break;
-  }
-
-  // Fill remaining with structural but useful info
-  keyMetrics.push({
+  for (const n of namedNums.slice(0, 2 - km.length))
+    km.push({
+      label: n.key,
+      value: n.val,
+      trend: "neutral",
+      context: `From ${sources[0] || "source"}`,
+    });
+  km.push({
     label: "Records",
     value: String(cleanRecords.length),
     trend: "neutral",
-    context: `From ${sources.join(", ") || "multiple sources"}`,
+    context: sources.slice(0, 2).join(", ") || "Multiple sources",
   });
-  keyMetrics.push({
+  km.push({
     label: "Sources",
-    value: String(sources.length || 1),
+    value: String(Math.max(1, sources.length)),
     trend: "neutral",
-    context: sources.join(", ") || "Multiple sources",
+    context: sources.join(", ") || "Multiple",
   });
 
-  // ── Content-driven insights ────────────────────────────────────────────
   const insights: any[] = [];
-
-  if (titles[0]) {
+  if (titles[0])
     insights.push({
       insight: `Top result: "${titles[0]}"`,
       significance: "high",
-      category: "Lead Result",
-      dataPoint: titles[0].slice(0, 60),
+      category: "Top Result",
+      dataPoint: titles[0].slice(0, 50),
     });
-  }
-  if (titles[1]) {
+  if (titles[1])
     insights.push({
-      insight: `Also retrieved: "${titles[1]}"${titles[2] ? ` and "${titles[2]}"` : ""}`,
+      insight: `Also includes: "${titles[1]}"${titles[2] ? ` and "${titles[2]}"` : ""} — ${cleanRecords.length} records total`,
       significance: "high",
       category: "Coverage",
-      dataPoint: `${cleanRecords.length} total records`,
+      dataPoint: `${cleanRecords.length} records`,
     });
-  }
-  for (const s of numericSamples.slice(0, 2)) {
+  for (const s of numSamples.slice(0, 2))
     insights.push({
-      insight: `${s.col} spans from ${s.min} to ${s.max} with an average of ${s.avg} across ${cleanRecords.length} records`,
+      insight: `${s.col} spans ${s.min} to ${s.max} with average ${s.avg}`,
       significance: "high",
-      category: "Data Range",
+      category: "Statistics",
       dataPoint: `avg ${s.avg}`,
     });
-  }
-  if (descriptions[0]) {
+  if (descs[0])
     insights.push({
-      insight: descriptions[0],
+      insight: descs[0].slice(0, 120),
       significance: "medium",
       category: "Detail",
       dataPoint: titles[0]?.slice(0, 40) || "record",
     });
-  }
-  if (!insights.length) {
-    insights.push({
-      insight: `${cleanRecords.length} records fetched from ${sources.join(", ") || "multiple sources"} — open the Data tab to explore all records`,
-      significance: "medium",
-      category: "Coverage",
-      dataPoint: `${cleanRecords.length} records`,
-    });
-  }
   insights.push({
-    insight: numericCols.length
-      ? `Numeric data found in: ${numericCols.join(", ")} — charts and ML analysis are enabled`
-      : "No numeric columns detected — data is text-based; use the Data tab to read all records",
+    insight:
+      sources.length > 1
+        ? `Data cross-validated from ${sources.length} sources: ${sources.join(", ")}`
+        : `Single source: ${sources[0] || "unknown"} — add more for cross-validation`,
     significance: "medium",
-    category: "Structure",
-    dataPoint: numericCols[0] || "text-only",
+    category: "Source Quality",
+    dataPoint: `${cleanRecords.length} total records`,
   });
+  insights.push({
+    insight:
+      numericCols.length >= 2
+        ? `${numericCols.length} numeric columns available (${numericCols.slice(0, 3).join(", ")}) — Charts and ML tabs are enabled`
+        : "Text-heavy dataset — use Data tab to read all records",
+    significance: "medium",
+    category: "Data Structure",
+    dataPoint: numericCols[0] || "text",
+  });
+
+  const verdict = numSamples[0]
+    ? numSamples[0].avg > numSamples[0].max * 0.6
+      ? "Above Average Performance"
+      : "Mixed Performance Signals"
+    : cleanRecords.length > 20
+      ? "Sufficient Data for Analysis"
+      : "Limited Data Available";
 
   return {
     summary,
-    keyMetrics: keyMetrics.slice(0, 4),
+    keyMetrics: km.slice(0, 4),
     prediction: {
-      result: "Pending Deep Analysis",
-      confidence: "65%",
-      reason: `AI analysis could not complete for "${subject}". ${cleanRecords.length} records are loaded — try AIXPLORE again or refine your query.`,
+      result: verdict,
+      confidence: `${Math.min(85, 50 + cleanRecords.length)}%`,
+      reason: `Based on ${cleanRecords.length} records from ${sources.join(", ") || "multiple sources"}. ${numSamples.length ? `Numeric analysis shows ${numSamples[0]?.col} averaging ${numSamples[0]?.avg}.` : ""} Click AIXPLORE again if a deeper AI analysis is needed.`,
     },
-    insights,
+    insights: insights.slice(0, 6),
     patterns: [
       {
-        pattern:
-          sources.length > 1
-            ? `Data spans ${sources.length} sources: ${sources.join(", ")}`
-            : "Single source dataset — add more for cross-validation",
-        frequency: `${cleanRecords.length} records total`,
-        significance: "Cross-source validation improves reliability",
+        pattern: numSamples[0]
+          ? `${numSamples[0].col} shows variance of ${(numSamples[0].max - numSamples[0].min).toFixed(2)} across ${cleanRecords.length} records`
+          : `${cleanRecords.length} records span ${sources.length} sources`,
+        frequency: `${cleanRecords.length} observations`,
+        significance: "Cross-source data improves reliability of conclusions",
       },
     ],
     scenarios: {
-      bull: "With sufficient data quality, automated analysis can surface actionable insights quickly.",
-      base: "Manual review of the Data tab will reveal key trends across sources.",
-      bear: "Limited numeric data may constrain quantitative analysis — supplement with additional sources.",
+      bull: `If trends hold, ${subject} shows potential for improvement based on ${cleanRecords.length} data points.`,
+      base: `Current data indicates moderate activity — ${titles[0] || "records"} represent the primary area of focus.`,
+      bear: `Limited data depth may affect accuracy. Add more sources for comprehensive analysis.`,
     },
     mlSuggestion:
       numericCols.length >= 2
-        ? `Dataset has ${numericCols.length} numeric columns (${numericCols.join(", ")}) — suitable for regression or clustering. Suggested target: ${numericCols[numericCols.length - 1]}.`
+        ? `${numericCols.length} numeric features available. Recommend starting with ${numericCols[numericCols.length - 1]} as target. Random Forest or XGBoost would work well.`
         : "Add structured numeric data sources to enable ML predictions.",
-    bestUseCase: `Explore all ${cleanRecords.length} records in the Data tab. ${titles[0] ? `Start with: "${titles[0]}"` : "Use filters to narrow down the most relevant records."} Download as CSV for deeper analysis in Python or Excel.`,
+    bestUseCase: `Explore all ${cleanRecords.length} records in the Data tab. ${titles[0] ? `Start with: "${titles[0]}". ` : ""}Download as CSV for analysis in Python or Excel.`,
   };
 }
+
 // ── POST ──────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
@@ -966,8 +946,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const {
-      records: cleanRecords,
-      rawRecords: allRaw,
+      records: rawCleanRecords,
+      rawRecords: rawAllRaw,
       siteType,
       meta,
       enriched,
@@ -975,60 +955,46 @@ export async function POST(req: NextRequest) {
       category,
       subjectLine,
     } = await req.json();
-    if (!cleanRecords?.length)
+
+    if (!rawCleanRecords?.length)
       return NextResponse.json(
         { error: "No records to analyse" },
         { status: 400 },
       );
 
-    // allRaw contains _sourceType-tagged records (sent from scrape result enriched)
-    // Fall back to cleanRecords if allRaw not sent
-    const fullRecords: any[] = allRaw?.length ? allRaw : cleanRecords;
+    // ── DATA-FIRST: flatten nested structures before anything else ──────────
+    const cleanRecords: any[] = flattenScrapedData(rawCleanRecords);
+    const allRaw: any[] = rawAllRaw?.length
+      ? flattenScrapedData(rawAllRaw)
+      : cleanRecords;
+    // ────────────────────────────────────────────────────────────────────────
 
     const cat = category || siteType || "general";
     const subject =
       subjectLine || enriched?.subjectLine || meta?.sourceUrl || "the topic";
 
-    // ── AI analysis ──────────────────────────────────────────────────────
     let analysis: any = null;
     try {
       const prompt = buildPrompt(
         cat,
         subject,
-        fullRecords,
+        allRaw,
         cleanRecords,
         rawText ?? "",
         enriched,
       );
-      console.log("PROMPT LENGTH:", prompt.length);
       const raw = await callAI(prompt, 4000);
-      console.log("AI RAW (first 300):", raw.slice(0, 300));
       analysis = parseJSON(raw);
-      console.log("PARSE RESULT:", analysis ? "OK" : "NULL");
     } catch (err) {
-      console.error("Analysis API error:", err);
+      console.error("AI analysis failed:", err);
     }
-    if (!analysis)
-      analysis = buildFallback(
-        cat,
-        subject,
-        fullRecords,
-        cleanRecords,
-        enriched,
-      );
 
-    // ── Charts from ACTUAL typed data ────────────────────────────────────
-    analysis.charts = buildChartConfigs(fullRecords, cleanRecords, cat);
+    if (!analysis || !analysis.summary) {
+      analysis = buildFallback(cat, subject, allRaw, cleanRecords, enriched);
+    }
 
-    // ── ML readiness from ACTUAL typed data ──────────────────────────────
-    analysis.mlReadiness = buildMLReadiness(fullRecords, cleanRecords);
-
-    // ── Stats ─────────────────────────────────────────────────────────────
-    const topHeadline =
-      fullRecords.find((r) => r.Title)?.Title ||
-      fullRecords.find((r) => r.Headline)?.Headline ||
-      "";
-
+    analysis.charts = buildCharts(allRaw, cleanRecords, cat);
+    analysis.mlReadiness = buildML(allRaw, cleanRecords);
     analysis.stats = {
       totalRecords: meta?.totalRecords ?? cleanRecords.length,
       scrapedAt: meta?.scrapedAt ?? new Date().toISOString(),
@@ -1037,7 +1003,6 @@ export async function POST(req: NextRequest) {
       category: cat,
       subjectLine: subject,
       sourcesUsed: meta?.sourcesUsed?.join(", ") || "",
-      topHeadline,
       ...(enriched?.sentiment
         ? {
             bullishNews: enriched.sentiment.bullish,

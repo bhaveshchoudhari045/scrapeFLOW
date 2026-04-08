@@ -54,7 +54,7 @@ export const ExecutorRegistry: RegistryType = {
   EXTRACT_DATA_WITH_AI: ExtractDataWithAIExecutor,
   READ_PROPERTY_FROM_JSON: ReadPropertyFromJsonExecutor,
   ADD_PROPERTY_TO_JSON: AddPropertyToJsonExecutor,
-  NAVIGATE_TO_URL: NavigateUrlExecutor,
+  NAVIGATE_URL: NavigateUrlExecutor,
   SCROLL_TO_ELEMENT: ScrollToElementExecutor,
   // ── NEW ──
   INFINITE_SCROLL: InfiniteScrollExecutor,

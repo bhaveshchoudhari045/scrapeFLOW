@@ -1,7 +1,5 @@
 import Logo from "@/components/Logo";
 import React from "react";
-import { Separator } from "@/components/ui/separator";
-import { ModeToggle } from "@/components/ThemeModeToggle";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 
 export default function layout({ children }: { children: React.ReactNode }) {
@@ -9,11 +7,6 @@ export default function layout({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col w-full h-screen">
       <AmbientCanvas />
       {children}
-      <Separator />
-      <footer className="flex items-center justify-between p-2">
-        <Logo iconSize={16} fontSize="text-xl"></Logo>
-        <ModeToggle />
-      </footer>
     </div>
   );
 }
