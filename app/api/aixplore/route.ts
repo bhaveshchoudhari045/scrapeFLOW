@@ -14,7 +14,7 @@ async function callClaude(prompt: string, maxTokens = 4000): Promise<string> {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6", // ← correct model string
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -54,7 +54,11 @@ async function callGroq(prompt: string, maxTokens = 4000): Promise<string> {
   return text;
 }
 
-async function callAI(prompt: string, maxTokens = 4000): Promise<string> {
+async function callAIAnalysis(
+  prompt: string,
+  maxTokens = 4000,
+): Promise<string> {
+  // Try Claude first, then Groq
   try {
     return await callClaude(prompt, maxTokens);
   } catch (e) {
@@ -63,21 +67,24 @@ async function callAI(prompt: string, maxTokens = 4000): Promise<string> {
   return await callGroq(prompt, maxTokens);
 }
 
-// ── Robust JSON parser ────────────────────────────────────────────────────
+// ── Robust JSON parser — handles truncation and markdown wrapping ─────────
 function parseJSON(raw: string): any | null {
   if (!raw) return null;
 
+  // Strip markdown fences if present
   const stripped = raw
     .replace(/^```json\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
 
   for (const candidate of [raw, stripped]) {
+    // Attempt 1: direct parse
     try {
       const r = JSON.parse(candidate);
       if (r && typeof r === "object") return r;
     } catch {}
 
+    // Attempt 2: extract first complete JSON object
     try {
       const m = candidate.match(/\{[\s\S]*\}/);
       if (m) {
@@ -86,13 +93,16 @@ function parseJSON(raw: string): any | null {
       }
     } catch {}
 
+    // Attempt 3: fix truncated JSON by balancing braces
     try {
       const m = candidate.match(/\{[\s\S]*/);
       if (m) {
         let str = m[0];
+        // Remove trailing incomplete key/value (ends mid-string)
         str = str.replace(/,?\s*"[^"]*$/, "");
         str = str.replace(/,?\s*"[^"]*":\s*"[^"]*$/, "");
         str = str.replace(/,?\s*"[^"]*":\s*\[[\s\S]*$/, "");
+        // Balance braces
         const open = (str.match(/\{/g) || []).length;
         const close = (str.match(/\}/g) || []).length;
         str += "}".repeat(Math.max(0, open - close));
@@ -104,42 +114,7 @@ function parseJSON(raw: string): any | null {
   return null;
 }
 
-// ── DATA-FIRST: Flatten nested record structures ───────────────────────────
-/**
- * Many scrapers nest real data inside sub-keys like `data`, `attributes`,
- * or `fields`. This promotes those values to the top level so column
- * detection and charting always see the actual content.
- */
-function flattenRecord(record: any): any {
-  const nested = record.attributes || record.data || record.fields || null;
-  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-    // Merge nested keys without clobbering top-level metadata
-    return { ...record, ...nested };
-  }
-  return record;
-}
-
-function flattenScrapedData(records: any[]): any[] {
-  return records.map(flattenRecord);
-}
-
-// ── DATA-FIRST: Column detection (ignores metadata / noise keys) ──────────
-const IGNORED_KEYS = new Set([
-  "_sourceName",
-  "_sourceType",
-  "id",
-  "ID",
-  "Category", // generic catch-all tag — not analytic content
-  "Status",
-  "url",
-  "URL",
-  "link",
-  "href",
-  "image",
-  "img",
-  "thumbnail",
-]);
-
+// ── Column detection ──────────────────────────────────────────────────────
 function detectColumns(records: any[]) {
   if (!records.length)
     return {
@@ -148,26 +123,20 @@ function detectColumns(records: any[]) {
       dateCols: [] as string[],
       allCols: [] as string[],
     };
-
   const allCols = [
     ...new Set(
-      records
-        .flatMap((r) => Object.keys(r))
-        .filter((k) => !k.startsWith("_") && !IGNORED_KEYS.has(k)),
+      records.flatMap((r) => Object.keys(r)).filter((k) => !k.startsWith("_")),
     ),
   ];
-
   const numericCols: string[] = [],
     textCols: string[] = [],
     dateCols: string[] = [];
-
   for (const col of allCols) {
     const vals = records
       .slice(0, 30)
       .map((r) => String(r[col] ?? ""))
       .filter((v) => v && v !== "—" && v !== "N/A");
     if (!vals.length) continue;
-
     const dateHits = vals.filter((v) =>
       /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(v),
     ).length;
@@ -175,7 +144,6 @@ function detectColumns(records: any[]) {
       dateCols.push(col);
       continue;
     }
-
     const numHits = vals.filter((v) => {
       const c = v
         .replace(/[₹$€£,\s%+]/g, "")
@@ -183,11 +151,9 @@ function detectColumns(records: any[]) {
         .replace(/km$/i, "");
       return c !== "" && !isNaN(parseFloat(c)) && isFinite(Number(c));
     }).length;
-
     if (numHits >= Math.max(2, vals.length * 0.45)) numericCols.push(col);
     else textCols.push(col);
   }
-
   return { numericCols, textCols, dateCols, allCols };
 }
 
@@ -217,31 +183,15 @@ function splitByType(records: any[]) {
   };
 }
 
-// ── DATA-FIRST: pickChartable prefers records that have numeric values ─────
-/**
- * Instead of relying solely on `_sourceType`, we now check whether records
- * actually contain numeric data. This means any scraped dataset with
- * prices, counts, scores, etc. will be charted even if its type tag is
- * missing or generic.
- */
 function pickChartable(allRaw: any[]): any[] {
-  const { ohlcv, dataset, products, academic } = splitByType(allRaw);
-
-  // Prefer typed subsets that are large enough
+  const { ohlcv, dataset, products, academic, finance, news, general } =
+    splitByType(allRaw);
   if (ohlcv.length >= 5) return ohlcv;
   if (dataset.length >= 3) return dataset;
   if (products.length >= 3) return products;
   if (academic.length >= 3) return academic;
-
-  // DATA-FIRST fallback: pick records that contain at least one non-zero numeric value
-  const withNumbers = allRaw.filter((r) =>
-    Object.values(r).some((v) => {
-      const n = toNum(v);
-      return n !== 0 && !isNaN(n);
-    }),
-  );
-
-  return withNumbers.length >= 3 ? withNumbers : allRaw;
+  const rest = allRaw.filter((r) => r._sourceType !== "finance");
+  return rest.length >= 3 ? rest : allRaw;
 }
 
 // ── Charts ────────────────────────────────────────────────────────────────
@@ -372,6 +322,7 @@ function buildCharts(
       });
   }
 
+  // Sentiment donut
   const newsRecs = allRaw.filter((r) =>
     ["news", "social"].includes(r._sourceType ?? ""),
   );
@@ -398,6 +349,7 @@ function buildCharts(
       });
   }
 
+  // Citations
   const papers = allRaw.filter(
     (r) =>
       r._sourceType === "academic" &&
@@ -424,6 +376,7 @@ function buildCharts(
       });
   }
 
+  // Product prices
   const prods = allRaw.filter((r) => r._sourceType === "product" && r.Name);
   if (prods.length >= 2) {
     const data = prods
@@ -450,14 +403,12 @@ function buildML(allRaw: any[], cleanRecords: any[]) {
   const { numericCols, textCols, dateCols, allCols } = detectColumns(working);
   const totalRows = working.length,
     totalCols = allCols.length;
-
   const missingCounts: Record<string, number> = {};
   allCols.forEach((k) => {
     missingCounts[k] = working.filter(
       (r) => !r[k] || r[k] === "—" || r[k] === "N/A" || r[k] === "",
     ).length;
   });
-
   const cleanCols = allCols.filter((k) => missingCounts[k] === 0);
   const dirtyCols = allCols.filter((k) => missingCounts[k] > totalRows * 0.2);
   const meaningful = numericCols.filter((c) => !/source|url|id|date/i.test(c));
@@ -469,7 +420,6 @@ function buildML(allRaw: any[], cleanRecords: any[]) {
     const u = new Set(working.map((r) => r[c]).filter(Boolean));
     return u.size >= 2 && u.size <= 20;
   });
-
   const tasks: string[] = [];
   if (numericCols.length >= 2)
     tasks.push("Regression — predict a numeric value");
@@ -479,7 +429,6 @@ function buildML(allRaw: any[], cleanRecords: any[]) {
     tasks.push("Time Series — forecast future values");
   if (totalRows >= 50 && numericCols.length >= 4)
     tasks.push("Anomaly Detection — flag outliers");
-
   const models: string[] = [];
   if (tasks.some((t) => t.includes("Regression")))
     models.push("XGBoost", "Random Forest", "Linear Regression");
@@ -489,7 +438,6 @@ function buildML(allRaw: any[], cleanRecords: any[]) {
     models.push("K-Means", "DBSCAN");
   if (tasks.some((t) => t.includes("Time Series")))
     models.push("Prophet", "LSTM", "ARIMA");
-
   const colStats = numericCols
     .slice(0, 6)
     .map((col) => {
@@ -507,7 +455,6 @@ function buildML(allRaw: any[], cleanRecords: any[]) {
       };
     })
     .filter(Boolean);
-
   const readinessScore = Math.min(
     99,
     Math.round(
@@ -516,7 +463,6 @@ function buildML(allRaw: any[], cleanRecords: any[]) {
         (numericCols.length / Math.max(totalCols, 1)) * 30,
     ),
   );
-
   return {
     readinessScore,
     totalRows,
@@ -553,16 +499,7 @@ function buildML(allRaw: any[], cleanRecords: any[]) {
   };
 }
 
-// ── DATA-FIRST: Prompt builder ────────────────────────────────────────────
-/**
- * Key changes from original:
- * 1. Detected column names are injected into the prompt as the authoritative
- *    list of fields to analyse — the model is explicitly told to ignore metadata.
- * 2. Column stats are always computed and surfaced so Claude anchors on real
- *    numbers rather than hallucinating them.
- * 3. The instruction block tells the model to compare columns, find
- *    outliers, and surface actual values — not structure commentary.
- */
+// ── Prompt builder ────────────────────────────────────────────────────────
 function buildPrompt(
   category: string,
   subject: string,
@@ -573,10 +510,9 @@ function buildPrompt(
 ): string {
   const { finance, ohlcv, news, academic, products, dataset, docs, general } =
     splitByType(allRaw);
-  const chartable = pickChartable(allRaw);
-  const { numericCols, textCols, dateCols } = detectColumns(chartable);
+  const { numericCols, textCols } = detectColumns(pickChartable(allRaw));
 
-  // Build context sample (strip internal _ fields)
+  // Send more records — enough for Claude to do real analysis
   let ctx: any[] = [];
   if (ohlcv.length) ctx.push(...ohlcv.slice(0, 15));
   if (finance.length) ctx.push(...finance.slice(0, 15));
@@ -588,14 +524,14 @@ function buildPrompt(
   if (general.length) ctx.push(...general.slice(0, 15));
   if (!ctx.length) ctx = cleanRecords.slice(0, 30);
 
+  // Strip internal _ fields
   const cleanCtx = ctx.map((r) => {
     const o: any = {};
-    for (const [k, v] of Object.entries(r))
-      if (!k.startsWith("_") && !IGNORED_KEYS.has(k)) o[k] = v;
+    for (const [k, v] of Object.entries(r)) if (!k.startsWith("_")) o[k] = v;
     return o;
   });
 
-  // Always compute real column stats
+  // Real column stats
   const statsLines = numericCols
     .slice(0, 6)
     .map((col) => {
@@ -631,41 +567,27 @@ function buildPrompt(
       extraCtx += `\nPRICES: min=₹${Math.min(...prices).toLocaleString()}, max=₹${Math.max(...prices).toLocaleString()}, avg=₹${Math.round(prices.reduce((a, b) => a + b, 0) / prices.length).toLocaleString()}`;
   }
 
+  // Limit sample JSON to 5000 chars so Claude doesn't get overwhelmed
   const sampleJSON = JSON.stringify(cleanCtx, null, 1).slice(0, 5000);
-
-  // DATA-FIRST instruction: tell the model exactly which columns to focus on
-  const analyticCols = [
-    ...numericCols.slice(0, 8),
-    ...dateCols.slice(0, 4),
-    ...textCols.slice(0, 6),
-  ];
 
   return `You are a world-class data analyst. The user searched for: "${subject}"
 Return ONLY a valid JSON object. No markdown, no backticks, no preamble. Start with { end with }.
 
-CRITICAL INSTRUCTION — DATA-FIRST ANALYSIS:
-- Analyze the CONTENT of the records, not their structure or metadata.
-- The authoritative analytic columns are: [${analyticCols.join(", ")}]
-- Do NOT mention field names like "_sourceType", "id", "Status", or "Category" in your response.
-- Compare actual values across records. Cite specific names, numbers, and ranges.
-- Your summary must contain at least 4 concrete data points (numbers, names, dates) from the sample.
-
 DATASET: ${cleanRecords.length} total records, ${ctx.length} shown below
 Numeric columns: ${numericCols.join(", ") || "none"}
 Text columns: ${textCols.slice(0, 8).join(", ") || "none"}
-Date columns: ${dateCols.join(", ") || "none"}
 Sources: ${enriched?.sourceResults?.map((s: any) => s.name).join(", ") || "multiple"}
 ${extraCtx}
 
-COLUMN STATS (use these numbers in your analysis — do not invent others):
-${statsLines || "  (no numeric columns detected)"}
+COLUMN STATS:
+${statsLines || "  (no numeric columns)"}
 
 DATA SAMPLE (${cleanCtx.length} records):
 ${sampleJSON}
 
 Respond with this exact JSON structure. Use SPECIFIC values from the data — no placeholders:
 {
-  "summary": "6-8 sentences with actual names, values, and numbers from the data. Be concrete.",
+  "summary": "6-8 sentences. Mention actual names, values, and numbers from the data. Be concrete.",
   "keyMetrics": [
     {"label": "metric name", "value": "exact value", "trend": "up|down|neutral", "context": "brief meaning"},
     {"label": "metric 2", "value": "exact value", "trend": "up|down|neutral", "context": "meaning"},
@@ -699,7 +621,7 @@ Respond with this exact JSON structure. Use SPECIFIC values from the data — no
 }`;
 }
 
-// ── Fallback — always returns real content, never "Pending" ───────────────
+// ── Fallback — always returns real content, never "Pending" ──────────────
 function buildFallback(
   category: string,
   subject: string,
@@ -787,6 +709,7 @@ function buildFallback(
     }
   }
 
+  // Also try extracting key numeric fields by name
   const namedNums: { key: string; val: string }[] = [];
   if (cleanRecords[0]) {
     for (const k of numKeys) {
@@ -807,37 +730,43 @@ function buildFallback(
     })
     .filter(Boolean);
 
+  // Build a real summary from actual data
   let summary = `${cleanRecords.length} records retrieved for "${subject}" from ${sources.length ? sources.join(", ") : "multiple sources"}. `;
-  if (titles.length)
+  if (titles.length) {
     summary += `Records include: "${titles.slice(0, 3).join('", "')}"${titles.length > 3 ? ` and ${titles.length - 3} more` : ""}. `;
-  if (numSamples.length)
+  }
+  if (numSamples.length) {
     summary +=
       numSamples
         .map((s) => `${s.col} ranges ${s.min}–${s.max} (avg ${s.avg})`)
         .join("; ") + ". ";
-  else if (namedNums.length)
+  } else if (namedNums.length) {
     summary += `Key values: ${namedNums.map((n) => `${n.key}=${n.val}`).join(", ")}. `;
+  }
   if (descs[0]) summary += descs[0] + " ";
   summary +=
     cleanRecords.length >= 20
       ? "Dataset is sufficient — explore Charts and Insights tabs for patterns."
       : "Consider fetching from more sources for richer analysis.";
 
+  // Build real key metrics
   const km: any[] = [];
-  for (const s of numSamples.slice(0, 2))
+  for (const s of numSamples.slice(0, 2)) {
     km.push({
       label: `Avg ${s.col}`,
       value: String(s.avg),
       trend: "neutral",
       context: `Range: ${s.min}–${s.max}`,
     });
-  for (const n of namedNums.slice(0, 2 - km.length))
+  }
+  for (const n of namedNums.slice(0, 2 - km.length)) {
     km.push({
       label: n.key,
       value: n.val,
       trend: "neutral",
       context: `From ${sources[0] || "source"}`,
     });
+  }
   km.push({
     label: "Records",
     value: String(cleanRecords.length),
@@ -851,6 +780,7 @@ function buildFallback(
     context: sources.join(", ") || "Multiple",
   });
 
+  // Build real insights
   const insights: any[] = [];
   if (titles[0])
     insights.push({
@@ -866,13 +796,14 @@ function buildFallback(
       category: "Coverage",
       dataPoint: `${cleanRecords.length} records`,
     });
-  for (const s of numSamples.slice(0, 2))
+  for (const s of numSamples.slice(0, 2)) {
     insights.push({
       insight: `${s.col} spans ${s.min} to ${s.max} with average ${s.avg}`,
       significance: "high",
       category: "Statistics",
       dataPoint: `avg ${s.avg}`,
     });
+  }
   if (descs[0])
     insights.push({
       insight: descs[0].slice(0, 120),
@@ -946,8 +877,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const {
-      records: rawCleanRecords,
-      rawRecords: rawAllRaw,
+      records: cleanRecords,
+      rawRecords: allRaw,
       siteType,
       meta,
       enriched,
@@ -955,20 +886,13 @@ export async function POST(req: NextRequest) {
       category,
       subjectLine,
     } = await req.json();
-
-    if (!rawCleanRecords?.length)
+    if (!cleanRecords?.length)
       return NextResponse.json(
         { error: "No records to analyse" },
         { status: 400 },
       );
 
-    // ── DATA-FIRST: flatten nested structures before anything else ──────────
-    const cleanRecords: any[] = flattenScrapedData(rawCleanRecords);
-    const allRaw: any[] = rawAllRaw?.length
-      ? flattenScrapedData(rawAllRaw)
-      : cleanRecords;
-    // ────────────────────────────────────────────────────────────────────────
-
+    const fullRecords: any[] = allRaw?.length ? allRaw : cleanRecords;
     const cat = category || siteType || "general";
     const subject =
       subjectLine || enriched?.subjectLine || meta?.sourceUrl || "the topic";
@@ -978,23 +902,30 @@ export async function POST(req: NextRequest) {
       const prompt = buildPrompt(
         cat,
         subject,
-        allRaw,
+        fullRecords,
         cleanRecords,
         rawText ?? "",
         enriched,
       );
-      const raw = await callAI(prompt, 4000);
+      const raw = await callAIAnalysis(prompt, 4000);
       analysis = parseJSON(raw);
     } catch (err) {
       console.error("AI analysis failed:", err);
     }
 
+    // Always fall back to data-driven fallback — never "Pending"
     if (!analysis || !analysis.summary) {
-      analysis = buildFallback(cat, subject, allRaw, cleanRecords, enriched);
+      analysis = buildFallback(
+        cat,
+        subject,
+        fullRecords,
+        cleanRecords,
+        enriched,
+      );
     }
 
-    analysis.charts = buildCharts(allRaw, cleanRecords, cat);
-    analysis.mlReadiness = buildML(allRaw, cleanRecords);
+    analysis.charts = buildCharts(fullRecords, cleanRecords, cat);
+    analysis.mlReadiness = buildML(fullRecords, cleanRecords);
     analysis.stats = {
       totalRecords: meta?.totalRecords ?? cleanRecords.length,
       scrapedAt: meta?.scrapedAt ?? new Date().toISOString(),

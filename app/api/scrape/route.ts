@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { callAIExtraction } from "@/lib/ai-tiered";
 
 const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY!;
 const NEWS_API_KEY = process.env.NEWS_API_KEY!;
 const NASA_API_KEY = process.env.NASA_API_KEY || "DEMO_KEY";
 const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY!;
-const GROQ_API_KEY = process.env.GROQ_API_KEY!;
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
-
-const GROQ_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama3-70b-8192",
-  "mixtral-8x7b-32768",
-  "llama-3.1-8b-instant",
-];
 
 const NEWS_API_DOMAINS = [
   "reuters.com",
@@ -44,60 +36,6 @@ const BLOCKED_DOMAINS = [
   "kaggle.com",
   "ourworldindata.org",
 ];
-
-// ── AI caller ─────────────────────────────────────────────────────────────
-async function callAI(prompt: string, maxTokens = 3000): Promise<string> {
-  // Claude first — much better at structured extraction
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: maxTokens,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      const text = (d.content?.[0]?.text ?? "").trim();
-      if (text) return text;
-    }
-  } catch {}
-
-  // Groq fallback
-  for (const model of GROQ_MODELS) {
-    try {
-      const res = await fetch(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${GROQ_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.1,
-            max_tokens: maxTokens,
-          }),
-        },
-      );
-      if (res.status === 429 || res.status === 404 || res.status === 400)
-        continue;
-      if (!res.ok) continue;
-      const d = await res.json();
-      const text = (d.choices?.[0]?.message?.content ?? "").trim();
-      if (text) return text;
-    } catch {}
-  }
-  return "";
-}
 
 // ── Extract with AI — uses extraction rules from query intelligence ────────
 async function extractWithAI(
@@ -166,16 +104,16 @@ RULES:
 5. For prices: convert to number format (remove ₹, commas) — keep as "₹X,XXX" string
 6. If page has no relevant data for "${refined}", return []`;
 
-  const raw = await callAI(prompt, 3000);
+  const raw = await callAIExtraction(prompt, 3000);
   if (!raw) return [];
 
   let records: any[] = [];
   try {
-    const m = raw.match(/\[[\s\S]*\]/);
+    const m = raw.text.match(/\[[\s\S]*\]/);
     if (m) records = JSON.parse(m[0]);
   } catch {
     try {
-      const clean = raw.replace(/,(\s*[\]}])/g, "$1");
+      const clean = raw.text.replace(/,(\s*[\]}])/g, "$1");
       const m2 = clean.match(/\[[\s\S]*\]/);
       if (m2) records = JSON.parse(m2[0]);
     } catch {}
@@ -199,7 +137,7 @@ RULES:
     );
     records = records.filter((r) => {
       const name = String(r.Name ?? r.Title ?? "").toLowerCase();
-      return !excludeTerms.some((term: any) => name.includes(term));
+      return !excludeTerms.some((term:any) => name.includes(term));
     });
   }
 
@@ -921,15 +859,17 @@ async function fetchFromWikipedia(url: string, intent: string) {
       });
     const searchResults = searchData?.query?.search ?? [];
     records.push(
-      ...searchResults.slice(0, 8).map((r: any) => ({
-        _sourceName: "Wikipedia",
-        _sourceType: "general",
-        Source: "📖 Wikipedia",
-        Title: r.title,
-        Abstract: r.snippet?.replace(/<[^>]+>/g, "") ?? "",
-        URL: `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, "_"))}`,
-        Date: "Current",
-      })),
+      ...searchResults
+        .slice(0, 8)
+        .map((r: any) => ({
+          _sourceName: "Wikipedia",
+          _sourceType: "general",
+          Source: "📖 Wikipedia",
+          Title: r.title,
+          Abstract: r.snippet?.replace(/<[^>]+>/g, "") ?? "",
+          URL: `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, "_"))}`,
+          Date: "Current",
+        })),
     );
     return records.filter((r) => r.Title);
   } catch {

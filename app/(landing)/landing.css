@@ -35,7 +35,6 @@ body {
   font-weight: 300;
   line-height: 1.7;
   overflow-x: hidden;
-  cursor: none;
 }
 #cursor {
   position: fixed;

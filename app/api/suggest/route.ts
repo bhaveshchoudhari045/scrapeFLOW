@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
-const GROQ_API_KEY    = process.env.GROQ_API_KEY!;
-const ANTHROPIC_KEY   = process.env.ANTHROPIC_API_KEY!;
+const GROQ_API_KEY = process.env.GROQ_API_KEY!;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 
 const GROQ_MODELS = [
   "llama-3.3-70b-versatile",
@@ -12,41 +12,48 @@ const GROQ_MODELS = [
 ];
 
 export interface QueryIntelligence {
-  refinedQuery:    string;          // Precise rewritten query
-  intent:          string;          // What user actually wants
+  refinedQuery: string; // Precise rewritten query
+  intent: string; // What user actually wants
   entities: {
-    primarySubject:  string;        // "laptops", "NVIDIA stock", "CRISPR"
-    constraints:     string[];      // ["under ₹50000", "8GB RAM", "India"]
-    location:        string;        // "India", "Mumbai", "" 
-    timeframe:       string;        // "latest", "2024", "last 5 years", ""
-    format:          string;        // "laptop", "research paper", "stock price"
-    priceRange?:     { min?: number; max?: number; currency: string };
-    brand?:          string;        // "Apple", "Samsung", ""
-    category:        string;        // "ecommerce", "finance", "academic" etc.
+    primarySubject: string; // "laptops", "NVIDIA stock", "CRISPR"
+    constraints: string[]; // ["under ₹50000", "8GB RAM", "India"]
+    location: string; // "India", "Mumbai", ""
+    timeframe: string; // "latest", "2024", "last 5 years", ""
+    format: string; // "laptop", "research paper", "stock price"
+    priceRange?: { min?: number; max?: number; currency: string };
+    brand?: string; // "Apple", "Samsung", ""
+    category: string; // "ecommerce", "finance", "academic" etc.
   };
-  extractionRules: {                // Tells scraper exactly what to look for
-    mustHaveFields:  string[];      // ["Name", "Price", "Rating", "Specs"]
-    mustFilter:      string[];      // ["price < 50000", "category = laptop"]  
-    mustExclude:     string[];      // ["bags", "accessories", "cases"]
-    outputFormat:    string;        // "product_list", "news_articles", "data_table"
+  extractionRules: {
+    // Tells scraper exactly what to look for
+    mustHaveFields: string[]; // ["Name", "Price", "Rating", "Specs"]
+    mustFilter: string[]; // ["price < 50000", "category = laptop"]
+    mustExclude: string[]; // ["bags", "accessories", "cases"]
+    outputFormat: string; // "product_list", "news_articles", "data_table"
   };
-  displayType:     "products" | "research" | "finance" | "news" | "mixed" | "tabular";
-  queryCategory:   string;
-  subjectLine:     string;
+  displayType:
+    | "products"
+    | "research"
+    | "finance"
+    | "news"
+    | "mixed"
+    | "tabular";
+  queryCategory: string;
+  subjectLine: string;
 }
 
 export interface SuggestedSite {
-  id:              string;
-  name:            string;
-  url:             string;
-  domain:          string;
-  description:     string;
-  category:        string;
-  fetchMethod:     "api" | "firecrawl" | "free";
-  creditCost:      number;
-  relevanceScore:  number;
-  favicon:         string;
-  extractionHint:  string;          // NEW — what to extract from this specific site
+  id: string;
+  name: string;
+  url: string;
+  domain: string;
+  description: string;
+  category: string;
+  fetchMethod: "api" | "firecrawl" | "free";
+  creditCost: number;
+  relevanceScore: number;
+  favicon: string;
+  extractionHint: string; // NEW — what to extract from this specific site
 }
 
 // ── Step 1: Query Intelligence — understand what user REALLY wants ────────
@@ -106,16 +113,22 @@ Return ONLY raw JSON, no markdown:
   // Groq fallback
   for (const model of GROQ_MODELS) {
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ_API_KEY}` },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.1,
-          max_tokens: 1000,
-        }),
-      });
+      const res = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1,
+            max_tokens: 1000,
+          }),
+        },
+      );
       if (!res.ok) continue;
       const d = await res.json();
       const raw = (d.choices?.[0]?.message?.content ?? "").trim();
@@ -130,44 +143,109 @@ Return ONLY raw JSON, no markdown:
 
 function buildFallbackIntelligence(intent: string): QueryIntelligence {
   const lower = intent.toLowerCase();
-  const isEcom    = /flipkart|amazon|myntra|nykaa|meesho|jiomart|croma|buy|price|shop|under|₹|\brs\b/i.test(intent);
-  const isFinance = /stock|share|nse|bse|sensex|nifty|bitcoin|crypto|gold|oil|market|reliance|tata|infosys/i.test(intent);
-  const isAcademic= /research|paper|study|arxiv|pubmed|journal|citation|abstract/i.test(intent);
-  const isSports  = /cricket|football|ipl|wicket|runs|average|batting|bowling|player|stats/i.test(intent);
-  const isNews    = /news|latest|today|current|breaking|update/i.test(intent);
+  const isEcom =
+    /flipkart|amazon|myntra|nykaa|meesho|jiomart|croma|buy|price|shop|under|₹|\brs\b/i.test(
+      intent,
+    );
+  const isFinance =
+    /stock|share|nse|bse|sensex|nifty|bitcoin|crypto|gold|oil|market|reliance|tata|infosys/i.test(
+      intent,
+    );
+  const isAcademic =
+    /research|paper|study|arxiv|pubmed|journal|citation|abstract/i.test(intent);
+  const isSports =
+    /cricket|football|ipl|wicket|runs|average|batting|bowling|player|stats/i.test(
+      intent,
+    );
+  const isNews = /news|latest|today|current|breaking|update/i.test(intent);
 
   const priceMatch = intent.match(/under\s*[₹$]?\s*([\d,]+)/i);
-  const maxPrice   = priceMatch ? parseInt(priceMatch[1].replace(/,/g,"")) : undefined;
+  const maxPrice = priceMatch
+    ? parseInt(priceMatch[1].replace(/,/g, ""))
+    : undefined;
 
-  const category = isEcom?"ecommerce":isFinance?"finance":isAcademic?"academic":isSports?"sports":isNews?"news":"general";
+  const category = isEcom
+    ? "ecommerce"
+    : isFinance
+      ? "finance"
+      : isAcademic
+        ? "academic"
+        : isSports
+          ? "sports"
+          : isNews
+            ? "news"
+            : "general";
 
   return {
     refinedQuery: intent,
     intent: `Find ${intent}`,
     entities: {
-      primarySubject: intent.replace(/(show|get|find|search|give me)/gi,"").trim().slice(0,50),
-      constraints: maxPrice ? [`price under ₹${maxPrice.toLocaleString()}`] : [],
-      location: lower.includes("india")?"India":lower.includes("mumbai")?"Mumbai":"",
-      timeframe: lower.includes("latest")||lower.includes("2024")?"2024":"",
-      format: isEcom?"product listing":isFinance?"stock data":isAcademic?"research paper":isSports?"career statistics":"general",
+      primarySubject: intent
+        .replace(/(show|get|find|search|give me)/gi, "")
+        .trim()
+        .slice(0, 50),
+      constraints: maxPrice
+        ? [`price under ₹${maxPrice.toLocaleString()}`]
+        : [],
+      location: lower.includes("india")
+        ? "India"
+        : lower.includes("mumbai")
+          ? "Mumbai"
+          : "",
+      timeframe:
+        lower.includes("latest") || lower.includes("2024") ? "2024" : "",
+      format: isEcom
+        ? "product listing"
+        : isFinance
+          ? "stock data"
+          : isAcademic
+            ? "research paper"
+            : isSports
+              ? "career statistics"
+              : "general",
       priceRange: maxPrice ? { max: maxPrice, currency: "INR" } : undefined,
       brand: "",
       category,
     },
     extractionRules: {
-      mustHaveFields: isEcom?["Name","Price","Rating","Specs"]:isFinance?["Price","Change","Volume"]:["Title","Description","Date"],
-      mustFilter: maxPrice?[`price less than ${maxPrice}`]:[],
-      mustExclude: isEcom?["bags","accessories","cases","sleeves","backpacks","covers"]:[],
-      outputFormat: isEcom?"product_list":isFinance?"stock_data":isAcademic?"research_papers":isSports?"career_stats":"general",
+      mustHaveFields: isEcom
+        ? ["Name", "Price", "Rating", "Specs"]
+        : isFinance
+          ? ["Price", "Change", "Volume"]
+          : ["Title", "Description", "Date"],
+      mustFilter: maxPrice ? [`price less than ${maxPrice}`] : [],
+      mustExclude: isEcom
+        ? ["bags", "accessories", "cases", "sleeves", "backpacks", "covers"]
+        : [],
+      outputFormat: isEcom
+        ? "product_list"
+        : isFinance
+          ? "stock_data"
+          : isAcademic
+            ? "research_papers"
+            : isSports
+              ? "career_stats"
+              : "general",
     },
-    displayType: isEcom?"products":isFinance?"finance":isAcademic?"research":isSports?"tabular":"mixed",
+    displayType: isEcom
+      ? "products"
+      : isFinance
+        ? "finance"
+        : isAcademic
+          ? "research"
+          : isSports
+            ? "tabular"
+            : "mixed",
     queryCategory: category,
-    subjectLine: intent.slice(0,30),
+    subjectLine: intent.slice(0, 30),
   };
 }
 
 // ── Step 2: Generate sources WITH extraction hints ────────────────────────
-async function generateSources(qi: QueryIntelligence, originalIntent: string): Promise<SuggestedSite[]> {
+async function generateSources(
+  qi: QueryIntelligence,
+  originalIntent: string,
+): Promise<SuggestedSite[]> {
   const { entities, extractionRules } = qi;
 
   const prompt = `You are a search intelligence expert. Generate exactly 10 best data sources for this query.
@@ -227,21 +305,25 @@ Generate all 10.`;
   const sites: SuggestedSite[] = parsed?.sites ?? [];
 
   return sites
-    .filter(s => s.name && s.url)
+    .filter((s) => s.name && s.url)
     .map((s, i) => ({
       ...s,
-      id: s.id || `site_${i+1}`,
-      favicon: s.favicon || `https://www.google.com/s2/favicons?domain=${s.domain}&sz=32`,
+      id: s.id || `site_${i + 1}`,
+      favicon:
+        s.favicon ||
+        `https://www.google.com/s2/favicons?domain=${s.domain}&sz=32`,
       creditCost: s.creditCost ?? (s.fetchMethod === "firecrawl" ? 1 : 0),
       relevanceScore: s.relevanceScore || 70,
-      extractionHint: s.extractionHint || `Extract ${extractionRules.mustHaveFields.join(", ")} relevant to: ${qi.refinedQuery}`,
+      extractionHint:
+        s.extractionHint ||
+        `Extract ${extractionRules.mustHaveFields.join(", ")} relevant to: ${qi.refinedQuery}`,
     }))
-    .sort((a,b) => (b.relevanceScore||0) - (a.relevanceScore||0))
+    .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
     .slice(0, 10);
 }
 
 function encodeQueryForURL(q: string): string {
-  return encodeURIComponent(q.replace(/\s+/g,"+"));
+  return encodeURIComponent(q.replace(/\s+/g, "+"));
 }
 
 async function tryAI(prompt: string, maxTokens: number): Promise<string> {
@@ -249,8 +331,16 @@ async function tryAI(prompt: string, maxTokens: number): Promise<string> {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type":"application/json", "x-api-key":ANTHROPIC_KEY, "anthropic-version":"2023-06-01" },
-      body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:maxTokens, messages:[{ role:"user", content:prompt }] }),
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      }),
     });
     const d = await res.json();
     if (res.ok) return (d.content?.[0]?.text ?? "").trim();
@@ -259,12 +349,24 @@ async function tryAI(prompt: string, maxTokens: number): Promise<string> {
   // Groq fallback
   for (const model of GROQ_MODELS) {
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type":"application/json", Authorization:`Bearer ${GROQ_API_KEY}` },
-        body: JSON.stringify({ model, messages:[{ role:"user", content:prompt }], temperature:0.3, max_tokens:maxTokens }),
-      });
-      if (res.status === 429 || res.status === 404 || res.status === 400) continue;
+      const res = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.3,
+            max_tokens: maxTokens,
+          }),
+        },
+      );
+      if (res.status === 429 || res.status === 404 || res.status === 400)
+        continue;
       if (!res.ok) continue;
       const d = await res.json();
       const text = (d.choices?.[0]?.message?.content ?? "").trim();
@@ -278,10 +380,22 @@ function safeParseJSON(raw: string): any | null {
   if (!raw) return null;
   for (const fn of [
     () => JSON.parse(raw),
-    () => JSON.parse(raw.replace(/```json\s*/i,"").replace(/```\s*$/,"").trim()),
-    () => { const m=raw.match(/\{[\s\S]*\}/); return m?JSON.parse(m[0]):null; },
+    () =>
+      JSON.parse(
+        raw
+          .replace(/```json\s*/i, "")
+          .replace(/```\s*$/, "")
+          .trim(),
+      ),
+    () => {
+      const m = raw.match(/\{[\s\S]*\}/);
+      return m ? JSON.parse(m[0]) : null;
+    },
   ]) {
-    try { const r=fn(); if(r&&typeof r==="object") return r; } catch {}
+    try {
+      const r = fn();
+      if (r && typeof r === "object") return r;
+    } catch {}
   }
   return null;
 }
@@ -290,10 +404,12 @@ function safeParseJSON(raw: string): any | null {
 export async function POST(req: NextRequest) {
   try {
     const { userId } = auth();
-    if (!userId) return NextResponse.json({ error:"Unauthorized" }, { status:401 });
+    if (!userId)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { intent } = await req.json();
-    if (!intent?.trim()) return NextResponse.json({ error:"Intent required" }, { status:400 });
+    if (!intent?.trim())
+      return NextResponse.json({ error: "Intent required" }, { status: 400 });
 
     console.log("[suggest] Analyzing query:", intent);
 
@@ -306,23 +422,27 @@ export async function POST(req: NextRequest) {
     const sites = await generateSources(qi, intent);
 
     if (!sites.length) {
-      return NextResponse.json({ error:"Failed to generate suggestions" }, { status:503 });
+      return NextResponse.json(
+        { error: "Failed to generate suggestions" },
+        { status: 503 },
+      );
     }
 
-    console.log(`[suggest] Generated ${sites.length} sites for: ${qi.refinedQuery}`);
+    console.log(
+      `[suggest] Generated ${sites.length} sites for: ${qi.refinedQuery}`,
+    );
 
     return NextResponse.json({
       success: true,
       sites,
       queryCategory: qi.queryCategory,
-      subjectLine:   qi.subjectLine,
-      displayType:   qi.displayType,
+      subjectLine: qi.subjectLine,
+      displayType: qi.displayType,
       // Pass full intelligence to scrape route
       queryIntelligence: qi,
     });
-
   } catch (err: any) {
     console.error("[suggest] Error:", err);
-    return NextResponse.json({ error:err.message }, { status:500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
