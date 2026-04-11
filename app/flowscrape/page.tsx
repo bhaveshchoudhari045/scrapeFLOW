@@ -45,42 +45,41 @@ export interface ScrapeResult {
   enriched?: any;
 }
 
-// ── Design tokens ─────────────────────────────────────────────────
-const COLORS = {
+const COLORS: Record<string, { bg: string; text: string; border: string }> = {
   academic: {
-    bg: "rgba(129,140,248,0.12)",
-    border: "rgba(129,140,248,0.3)",
-    text: "#a5b4fc",
+    bg: "rgba(124,58,237,0.07)",
+    border: "rgba(124,58,237,0.2)",
+    text: "#7c3aed",
   },
   finance: {
-    bg: "rgba(0,245,200,0.1)",
-    border: "rgba(0,245,200,0.3)",
-    text: "#00f5c8",
+    bg: "rgba(22,163,74,0.07)",
+    border: "rgba(22,163,74,0.2)",
+    text: "#16a34a",
   },
   shopping: {
-    bg: "rgba(251,146,60,0.12)",
-    border: "rgba(251,146,60,0.3)",
-    text: "#fb923c",
+    bg: "rgba(234,88,12,0.07)",
+    border: "rgba(234,88,12,0.2)",
+    text: "#ea580c",
   },
   news: {
-    bg: "rgba(148,163,184,0.1)",
-    border: "rgba(148,163,184,0.3)",
-    text: "#94a3b8",
+    bg: "rgba(100,116,139,0.07)",
+    border: "rgba(100,116,139,0.2)",
+    text: "#64748b",
   },
   social: {
-    bg: "rgba(255,107,74,0.1)",
-    border: "rgba(255,107,74,0.3)",
-    text: "#ff6b4a",
+    bg: "rgba(219,39,119,0.07)",
+    border: "rgba(219,39,119,0.2)",
+    text: "#db2777",
   },
   science: {
-    bg: "rgba(167,139,250,0.1)",
-    border: "rgba(167,139,250,0.3)",
-    text: "#a78bfa",
+    bg: "rgba(8,145,178,0.07)",
+    border: "rgba(8,145,178,0.2)",
+    text: "#0891b2",
   },
   general: {
-    bg: "rgba(100,116,139,0.1)",
-    border: "rgba(100,116,139,0.3)",
-    text: "#64748b",
+    bg: "rgba(113,113,122,0.07)",
+    border: "rgba(113,113,122,0.2)",
+    text: "#71717a",
   },
 };
 
@@ -148,14 +147,9 @@ const QUICK_SEARCHES = [
     q: "Cancer immunotherapy breakthrough research papers",
   },
   {
-    emoji: "🎮",
-    label: "Gaming news",
-    q: "Latest gaming news and game releases",
-  },
-  {
     emoji: "🏏",
     label: "Cricket stats",
-    q: "Rohit Sharma batting statistics from Kaggle",
+    q: "Rohit Sharma cricket batting statistics",
   },
   {
     emoji: "🛢️",
@@ -167,9 +161,13 @@ const QUICK_SEARCHES = [
     label: "AI breakthroughs",
     q: "Artificial intelligence latest research arxiv",
   },
+  {
+    emoji: "🎮",
+    label: "Gaming news",
+    q: "Latest gaming news and game releases",
+  },
 ];
 
-// ─────────────────────────────────────────────────────────────────
 export default function FlowScrapePage() {
   const [intent, setIntent] = useState("");
   const [step, setStep] = useState<
@@ -186,7 +184,11 @@ export default function FlowScrapePage() {
   const [aixploreLoading, setAixploreLoading] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [dark, setDark] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Dark mode is handled entirely via className on the root div.
+  // No useEffect needed — className={`fs-root ${dark ? "dark" : ""}`} is sufficient.
 
   const filteredSites =
     activeTab === "All"
@@ -194,11 +196,11 @@ export default function FlowScrapePage() {
       : sites.filter(
           (s) => s.category?.toLowerCase() === activeTab.toLowerCase(),
         );
+
   const creditCost = sites.filter(
     (s) => selectedIds.has(s.id) && s.creditCost > 0,
   ).length;
 
-  // ── Step 1: Suggest ────────────────────────────────────────────
   async function handleSuggest(q?: string) {
     const query = q ?? intent;
     if (!query.trim()) return;
@@ -236,7 +238,6 @@ export default function FlowScrapePage() {
     }
   }
 
-  // ── Step 2: Fetch ──────────────────────────────────────────────
   async function handleFetch() {
     if (!selectedIds.size) {
       toast.error("Select at least one source");
@@ -261,7 +262,7 @@ export default function FlowScrapePage() {
       setResult(json);
       setStep("results");
       toast.success(
-        `✓ ${json.meta.totalRecords} records from ${json.meta.sourcesUsed?.length ?? selected.length} sources`,
+        `${json.meta.totalRecords} records from ${json.meta.sourcesUsed?.length ?? selected.length} sources`,
       );
     } catch (e: any) {
       toast.error(e.message);
@@ -270,7 +271,6 @@ export default function FlowScrapePage() {
     }
   }
 
-  // ── Step 3: AIXPLORE ───────────────────────────────────────────
   async function handleAixplore() {
     if (!result) return;
     setAixploreLoading(true);
@@ -280,7 +280,6 @@ export default function FlowScrapePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           records: result.data.records,
-          rawRecords: result.enriched?._allRaw,
           siteType: result.config.siteType,
           meta: result.meta,
           enriched: result.enriched ?? null,
@@ -311,7 +310,7 @@ export default function FlowScrapePage() {
   }
 
   function dl(type: "json" | "csv") {
-    if (!result) return;
+    if (!result?.data.records.length) return;
     if (type === "json") {
       const b = new Blob([JSON.stringify(result.data.records, null, 2)], {
         type: "application/json",
@@ -321,7 +320,7 @@ export default function FlowScrapePage() {
       a.download = `data-${Date.now()}.json`;
       a.click();
     } else {
-      const keys = Object.keys(result.data.records[0] ?? {});
+      const keys = Object.keys(result.data.records[0]);
       const csv = [
         keys.join(","),
         ...result.data.records.map((r) =>
@@ -340,15 +339,14 @@ export default function FlowScrapePage() {
     step === "search" ? 1 : step === "sources" ? 2 : step === "results" ? 3 : 4;
 
   return (
-    <div className="fs-root">
-      {/* ══ TOP BAR ══════════════════════════════════════════════ */}
+    <div className={`fs-root ${dark ? "dark" : ""}`}>
+      {/* ══ TOPBAR ══ */}
       <header className="fs-topbar">
         <div className="fs-logo">
           <div className="fs-logo-mark">SF</div>
           <span className="fs-logo-text">FlowScrape</span>
         </div>
 
-        {/* Pipeline steps */}
         <div className="fs-steps">
           {[
             { n: 1, label: "Search" },
@@ -356,20 +354,18 @@ export default function FlowScrapePage() {
             { n: 3, label: "Data" },
             { n: 4, label: "Insights" },
           ].map((s, i) => (
-            <>
-              {i > 0 && (
-                <span key={`arr-${i}`} className="fs-step-arrow">
-                  ›
-                </span>
-              )}
+            <span
+              key={s.n}
+              style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}
+            >
+              {i > 0 && <span className="fs-step-arrow">›</span>}
               <div
-                key={s.n}
                 className={`fs-step ${stepNum === s.n ? "active" : stepNum > s.n ? "done" : ""}`}
               >
                 <span className="fs-step-dot" />
                 {s.label}
               </div>
-            </>
+            </span>
           ))}
         </div>
 
@@ -377,8 +373,7 @@ export default function FlowScrapePage() {
           {result && (
             <div className="fs-meta-pill">
               <span className="fs-meta-dot" />
-              {result.meta.totalRecords} records · {result.meta.dataSize} ·{" "}
-              {result.meta.sourcesUsed?.length ?? 0} sources
+              {result.meta.totalRecords} records · {result.meta.dataSize}
             </div>
           )}
           {step !== "search" && (
@@ -393,12 +388,19 @@ export default function FlowScrapePage() {
           >
             {sidebarOpen ? "◧" : "▣"}
           </button>
+          <button
+            className="fs-theme-btn"
+            onClick={() => setDark((d) => !d)}
+            title="Toggle theme"
+          >
+            {dark ? "☀" : "◑"}
+          </button>
         </div>
       </header>
 
-      {/* ══ BODY ═════════════════════════════════════════════════ */}
+      {/* ══ BODY ══ */}
       <div className="fs-body">
-        {/* ── LEFT SIDEBAR ─────────────────────────────────────── */}
+        {/* ── SIDEBAR ── */}
         <aside className={`fs-sidebar ${sidebarOpen ? "" : "closed"}`}>
           <div className="fs-sidebar-scroll">
             <div className="fs-sidebar-section">
@@ -414,10 +416,8 @@ export default function FlowScrapePage() {
                 </button>
               ))}
             </div>
-
-            {/* Domain legend */}
-            <div className="fs-sidebar-section" style={{ marginTop: "0.5rem" }}>
-              <div className="fs-sidebar-label">Source Categories</div>
+            <div className="fs-sidebar-section">
+              <div className="fs-sidebar-label">Categories</div>
               {Object.entries(COLORS).map(([cat, c]) => (
                 <div
                   key={cat}
@@ -425,11 +425,11 @@ export default function FlowScrapePage() {
                     display: "flex",
                     alignItems: "center",
                     gap: "0.5rem",
-                    padding: "0.3rem 0.25rem",
-                    fontSize: "0.72rem",
+                    padding: "0.3rem 0.375rem",
+                    fontSize: "12px",
                   }}
                 >
-                  <span style={{ fontSize: "0.8rem" }}>{CAT_ICONS[cat]}</span>
+                  <span style={{ fontSize: "13px" }}>{CAT_ICONS[cat]}</span>
                   <span style={{ color: c.text, textTransform: "capitalize" }}>
                     {cat}
                   </span>
@@ -439,7 +439,7 @@ export default function FlowScrapePage() {
           </div>
         </aside>
 
-        {/* ── MAIN PANEL ───────────────────────────────────────── */}
+        {/* ── MAIN ── */}
         <main className="fs-main">
           {/* ·· STEP 1: Search ·· */}
           {step === "search" && (
@@ -447,15 +447,15 @@ export default function FlowScrapePage() {
               <div className="fs-hero-eyebrow">
                 ✦ Intelligent Data Discovery
               </div>
-              <div className="fs-hero-title">Ask for anything</div>
-              <div className="fs-hero-sub">
-                Stocks · Research · Products · News · Sports · Datasets ·
-                Anything
-              </div>
+              <h1 className="fs-hero-title">Ask for anything</h1>
+              <p className="fs-hero-sub">
+                Stocks · Research · Products · News · Sports · Anything on the
+                internet
+              </p>
 
               <div
                 className="fs-search-box"
-                style={{ width: "100%", maxWidth: 700 }}
+                style={{ width: "100%", maxWidth: 680 }}
               >
                 <textarea
                   ref={inputRef}
@@ -467,9 +467,7 @@ export default function FlowScrapePage() {
                       handleSuggest();
                     }
                   }}
-                  placeholder={
-                    'Try: "Rohit Sharma stats from Kaggle" · "Nvidia stock deep analysis" · "CRISPR research papers 2024"'
-                  }
+                  placeholder='Try: "Nvidia stock analysis" · "CRISPR research papers" · "Laptops under ₹50,000 Flipkart"'
                   className="fs-search-input"
                   rows={2}
                 />
@@ -504,17 +502,22 @@ export default function FlowScrapePage() {
             </div>
           )}
 
-          {/* ·· STEP 2: Source selection ·· */}
+          {/* ·· STEP 2: Sources ·· */}
           {step === "sources" && (
             <div className="fs-sources-panel">
               <div className="fs-sources-header">
                 <div className="fs-sources-title">
                   {suggesting
                     ? "Finding best sources…"
-                    : `${sites.length} sources found for `}
+                    : `${sites.length} sources found`}
                   {!suggesting && queryMeta?.subjectLine && (
-                    <span style={{ color: "#00f5ff" }}>
-                      "{queryMeta.subjectLine}"
+                    <span
+                      style={{
+                        color: "var(--fs-text3)",
+                        marginLeft: "0.375rem",
+                      }}
+                    >
+                      for "{queryMeta.subjectLine}"
                     </span>
                   )}
                 </div>
@@ -532,7 +535,7 @@ export default function FlowScrapePage() {
                       )}
                       {tab}
                       {tab !== "All" && (
-                        <span style={{ marginLeft: "0.25rem", opacity: 0.5 }}>
+                        <span style={{ marginLeft: "0.25rem", opacity: 0.4 }}>
                           {
                             sites.filter(
                               (s) =>
@@ -546,12 +549,12 @@ export default function FlowScrapePage() {
                   <button
                     style={{
                       marginLeft: "auto",
-                      padding: "0.3rem 0.75rem",
-                      borderRadius: "7px",
-                      fontSize: "0.68rem",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      padding: "0.3rem 0.625rem",
+                      borderRadius: 6,
+                      fontSize: 11,
+                      border: "1px solid var(--fs-border)",
                       background: "transparent",
-                      color: "#475569",
+                      color: "var(--fs-text3)",
                       cursor: "pointer",
                     }}
                     onClick={() => {
@@ -576,14 +579,14 @@ export default function FlowScrapePage() {
 
               <div className="fs-sources-grid">
                 {suggesting
-                  ? Array.from({ length: 10 }).map((_, i) => (
+                  ? Array.from({ length: 12 }).map((_, i) => (
                       <div
                         key={i}
                         style={{
                           height: 110,
-                          borderRadius: 11,
-                          background: "rgba(255,255,255,0.02)",
-                          border: "1px solid rgba(255,255,255,0.05)",
+                          borderRadius: "var(--fs-radius)",
+                          background: "var(--fs-bg2)",
+                          border: "1px solid var(--fs-border)",
                           animation: "pulse 1.5s ease-in-out infinite",
                         }}
                       />
@@ -641,9 +644,9 @@ export default function FlowScrapePage() {
                               <span
                                 className="fs-tag"
                                 style={{
-                                  background: "rgba(245,158,11,0.1)",
-                                  color: "#f59e0b",
-                                  border: "1px solid rgba(245,158,11,0.2)",
+                                  background: "rgba(217,119,6,0.08)",
+                                  color: "var(--fs-amber)",
+                                  border: "1px solid rgba(217,119,6,0.2)",
                                 }}
                               >
                                 paid
@@ -652,8 +655,9 @@ export default function FlowScrapePage() {
                             <span
                               className="fs-tag"
                               style={{
-                                background: "rgba(255,255,255,0.04)",
-                                color: "#334155",
+                                background: "var(--fs-bg2)",
+                                color: "var(--fs-text3)",
+                                border: "1px solid var(--fs-border)",
                               }}
                             >
                               {site.relevanceScore}%
@@ -668,21 +672,25 @@ export default function FlowScrapePage() {
                 <div className="fs-sources-meta">
                   <strong>{selectedIds.size}</strong> of {sites.length} selected
                   {creditCost > 0 && (
-                    <span style={{ color: "#f59e0b", marginLeft: "0.75rem" }}>
-                      ⚡ {creditCost} firecrawl credit
-                      {creditCost > 1 ? "s" : ""}
+                    <span
+                      style={{
+                        color: "var(--fs-amber)",
+                        marginLeft: "0.75rem",
+                      }}
+                    >
+                      ⚡ {creditCost} credit{creditCost > 1 ? "s" : ""}
                     </span>
                   )}
                 </div>
-                <div style={{ display: "flex", gap: "0.625rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     style={{
-                      padding: "0.625rem 1.25rem",
-                      borderRadius: "9px",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      padding: "0.5rem 1rem",
+                      borderRadius: 8,
+                      border: "1px solid var(--fs-border)",
                       background: "transparent",
-                      color: "#64748b",
-                      fontSize: "0.78rem",
+                      color: "var(--fs-text2)",
+                      fontSize: 13,
                       cursor: "pointer",
                     }}
                     onClick={() => setStep("search")}
@@ -697,10 +705,10 @@ export default function FlowScrapePage() {
                     {loading ? (
                       <>
                         <span className="fs-spin" />
-                        Fetching {selectedIds.size} sources…
+                        Fetching…
                       </>
                     ) : (
-                      <>⚡ Fetch Data ({selectedIds.size})</>
+                      <>Fetch Data ({selectedIds.size})</>
                     )}
                   </button>
                 </div>
@@ -708,31 +716,22 @@ export default function FlowScrapePage() {
             </div>
           )}
 
-          {/* ·· Loading overlay ·· */}
+          {/* ·· Loading ·· */}
           {loading && (
             <div className="fs-loading">
               <div className="fs-loading-ring" />
               <div className="fs-loading-text">
-                Fetching from {selectedIds.size} sources in parallel…
+                Fetching from {selectedIds.size} sources…
               </div>
               <div className="fs-loading-sub">
-                {/flipkart|amazon|jio/i.test(intent)
-                  ? "Scraping product listings via Firecrawl…"
-                  : /stock|finance|reliance|tesla|nvidia/i.test(intent)
-                    ? "Pulling live market data…"
-                    : /nasa|space|asteroid/i.test(intent)
-                      ? "Calling NASA APIs…"
-                      : /arxiv|pubmed|scholar|research/i.test(intent)
-                        ? "Querying academic databases…"
-                        : "Aggregating data across sources…"}
+                Aggregating and structuring data
               </div>
             </div>
           )}
 
-          {/* ·· STEP 3: Results dashboard ·· */}
+          {/* ·· STEP 3: Results ·· */}
           {step === "results" && result && !loading && (
             <div className="fs-dash">
-              {/* Sources used + toolbar */}
               <div className="fs-dash-topbar">
                 <div
                   style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem" }}
@@ -742,9 +741,9 @@ export default function FlowScrapePage() {
                       key={i}
                       className="fs-source-chip"
                       style={{
-                        background: "rgba(0,245,255,0.06)",
-                        border: "1px solid rgba(0,245,255,0.15)",
-                        color: "#00f5c8",
+                        background: "var(--fs-green-dim)",
+                        color: "var(--fs-green)",
+                        border: "1px solid rgba(22,163,74,0.15)",
                       }}
                     >
                       {s}
@@ -774,7 +773,6 @@ export default function FlowScrapePage() {
                 </button>
               </div>
 
-              {/* Data body */}
               <div className="fs-data-area">
                 {viewMode === "raw" && (
                   <pre className="fs-raw">
@@ -799,7 +797,7 @@ export default function FlowScrapePage() {
                             <div key={k} className="fs-kv-row">
                               <span className="fs-kv-key">{k}</span>
                               <span className="fs-kv-val">
-                                {String(v).slice(0, 220)}
+                                {String(v).slice(0, 200)}
                               </span>
                             </div>
                           ))}
@@ -815,7 +813,7 @@ export default function FlowScrapePage() {
                       return (
                         <div
                           style={{
-                            color: "#334155",
+                            color: "var(--fs-text3)",
                             padding: "2rem",
                             textAlign: "center",
                           }}
@@ -850,7 +848,6 @@ export default function FlowScrapePage() {
                     );
                   })()}
 
-                {/* Images */}
                 {result.data.images.length > 0 && (
                   <div className="fs-imgs">
                     {result.data.images.slice(0, 12).map((src, i) => (
@@ -867,12 +864,11 @@ export default function FlowScrapePage() {
                 )}
               </div>
 
-              {/* AIXPLORE CTA bar */}
               <div className="fs-cta-bar">
                 <div className="fs-cta-hint">
                   <span className="fs-cta-hint-star">✦</span>
-                  {result.meta.totalRecords} records ready · AI will analyse all{" "}
-                  {result.meta.sourcesUsed?.length ?? ""} sources simultaneously
+                  {result.meta.totalRecords} records ready · AI will analyse all
+                  sources simultaneously
                 </div>
                 <button
                   className="fs-aixplore-btn"
@@ -895,74 +891,56 @@ export default function FlowScrapePage() {
             </div>
           )}
 
-          {/* ·· STEP 4: AIXPLORE analysis ·· */}
+          {/* ·· STEP 4: Analysis ·· */}
           {step === "analysis" && analysis && result && (
             <div
               style={{
-                flex: 1,
                 display: "flex",
                 flexDirection: "column",
+                flex: 1,
                 overflow: "hidden",
               }}
             >
-              {/* mini toolbar above panel */}
               <div
                 style={{
-                  padding: "0.625rem 1.5rem",
-                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  padding: "0.625rem 1.25rem",
+                  borderBottom: "1px solid var(--fs-border)",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.75rem",
                   flexShrink: 0,
+                  background: "var(--fs-surface)",
                 }}
               >
                 <button
                   style={{
                     padding: "0.3rem 0.75rem",
-                    borderRadius: "7px",
-                    fontSize: "0.68rem",
-                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    border: "1px solid var(--fs-border)",
                     background: "transparent",
-                    color: "#64748b",
+                    color: "var(--fs-text2)",
                     cursor: "pointer",
                   }}
                   onClick={() => setStep("results")}
                 >
                   ← Back to Data
                 </button>
-                <span style={{ fontSize: "0.72rem", color: "#334155" }}>
-                  {result.meta.totalRecords} records analysed ·{" "}
+                <span style={{ fontSize: 11, color: "var(--fs-text3)" }}>
+                  {result.meta.totalRecords} records ·{" "}
                   {result.meta.sourcesUsed?.join(", ")}
                 </span>
                 <div
-                  style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}
+                  style={{
+                    marginLeft: "auto",
+                    display: "flex",
+                    gap: "0.375rem",
+                  }}
                 >
-                  <button
-                    style={{
-                      padding: "0.3rem 0.75rem",
-                      borderRadius: "7px",
-                      fontSize: "0.68rem",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      background: "transparent",
-                      color: "#64748b",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => dl("csv")}
-                  >
+                  <button className="fs-dl-btn" onClick={() => dl("csv")}>
                     ↓ CSV
                   </button>
-                  <button
-                    style={{
-                      padding: "0.3rem 0.75rem",
-                      borderRadius: "7px",
-                      fontSize: "0.68rem",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      background: "transparent",
-                      color: "#64748b",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => dl("json")}
-                  >
+                  <button className="fs-dl-btn" onClick={() => dl("json")}>
                     ↓ JSON
                   </button>
                 </div>
