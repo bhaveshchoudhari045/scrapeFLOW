@@ -55,10 +55,10 @@ function DesktopSidebar() {
       <div className="flex items-center justify-center gap-2 border-b-[1px] border-separate p-4">
         <Logo />
       </div>
-      <div className="p-2">
-        <UserAvailableCreditsBadge />
+      <div className="p-2 bg-slate-500/5 border-b-[1px] border-separate ">
+        <UserAvailableCreditsBadge  />
       </div>
-      <div className="flex flex-col p-2">
+      <div className="flex flex-col p-2 gap-2">
         {routes.map((route) => (
           <Link
             key={route.href}

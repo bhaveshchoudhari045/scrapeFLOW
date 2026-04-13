@@ -1,7 +1,6 @@
 "use client";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+
+import { Button } from "@/components/ui/button";
 import { WorkflowExecutionStatus, WorkflowStatus } from "@/types/workflow";
 import { Workflow } from "@prisma/client";
 import {
@@ -30,56 +29,118 @@ import TooltipWrapper from "@/components/TooltipWrapper";
 import DeleteWorkflowDialog from "@/app/(dashboard)/workflows/_components/DeleteWorkflowDialog";
 import RunBtn from "./RunBtn";
 import SchedulerDialog from "./SchedulerDialog";
-import { Badge } from "@/components/ui/badge";
 import ExecutionStatusIndicator, {
   ExecutionStatusLabel,
 } from "@/app/workflow/runs/[workflowId]/_components/ExecutionStatusIndicator";
-import { formatDistance, formatDistanceToNow } from "date-fns";
-import { format } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
-import { DuplicateWorkflow } from "@/actions/workflows/duplicateWorkflow";
 import DuplicateWorkflowDialog from "./DuplicateWorkflowDialog";
 
-const statusColors = {
-  [WorkflowStatus.DRAFT]: "bg-yellow-400 text-yellow-600",
-  [WorkflowStatus.PUBLISHED]: "bg-primary",
-};
 function WorkflowCard({ workflow }: { workflow: Workflow }) {
   const isDraft = workflow.status === WorkflowStatus.DRAFT;
+
   return (
-    <Card className="border border-separate shadow-sm rounded-lg overflow-hidden hover:shadow-md dark:shadow-primary/30 group/card">
-      <CardContent className="p-4 flex items-center justify-between h-[100px]">
-        <div className="flex items-center justify-end space-x-3">
+    <div
+      style={{
+        background: "var(--bg)",
+        border: "1px solid var(--border)",
+        borderRadius: 16,
+        overflow: "hidden",
+        marginBottom: "0.75rem",
+        transition: "all 0.22s cubic-bezier(0.16,1,0.3,1)",
+        position: "relative",
+      }}
+      className="wf-card-root"
+    >
+      {/* Main Content */}
+      <div
+        style={{
+          padding: "1.125rem 1.375rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+        }}
+      >
+        {/* Left — icon + info */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "1rem",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {/* Status icon */}
           <div
-            className={cn(
-              "w-10 h-10 rounded-full flex items-center  justify-center",
-              statusColors[workflow.status as WorkflowStatus],
-            )}
+            style={{
+              width: 44,
+              height: 44,
+              flexShrink: 0,
+              borderRadius: 11,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: isDraft ? "rgba(234,179,8,0.1)" : "var(--accent-dim)",
+              border: `1px solid ${
+                isDraft
+                  ? "rgba(234,179,8,0.25)"
+                  : "hsl(var(--p-h) var(--p-s) var(--p-l) / 0.25)"
+              }`,
+              color: isDraft ? "#ca8a04" : "var(--accent-cur)",
+              transition: "all 0.2s",
+            }}
           >
             {isDraft ? (
-              <FileTextIcon className="h-5 w-5" />
+              <FileTextIcon size={18} strokeWidth={1.75} />
             ) : (
-              <PlayIcon className="h-5 w-5 text-white" />
+              <PlayIcon size={18} strokeWidth={1.75} />
             )}
           </div>
-          <div>
-            <h3 className="text-base font-bold text-muted-foreground flex items-center">
+
+          {/* Name + schedule */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "0.25rem",
+              }}
+            >
               <TooltipWrapper content={workflow.description}>
                 <Link
                   href={`/workflow/editor/${workflow.id}`}
-                  className="flex items-center hover:underline"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "0.9375rem",
+                    fontWeight: 600,
+                    color: "var(--tx1)",
+                    textDecoration: "none",
+                    letterSpacing: "-0.01em",
+                    transition: "color 0.15s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.color = "var(--accent-cur)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.color = "var(--tx1)")
+                  }
                 >
                   {workflow.name}
                 </Link>
               </TooltipWrapper>
 
-              {isDraft && (
-                <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                  Draft
-                </span>
+              {isDraft ? (
+                <span className="wf-draft-badge">Draft</span>
+              ) : (
+                <span className="wf-published-badge">Published</span>
               )}
+
               <DuplicateWorkflowDialog workflowId={workflow.id} />
-            </h3>
+            </div>
+
             <ScheduleSection
               isDraft={isDraft}
               creditsCost={workflow.creditsCost}
@@ -88,31 +149,39 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
             />
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+
+        {/* Right — actions */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            flexShrink: 0,
+          }}
+        >
           {!isDraft && <RunBtn workflowId={workflow.id} />}
+
           <Link
             href={`/workflow/editor/${workflow.id}`}
-            className={cn(
-              buttonVariants({
-                variant: "outline",
-                size: "sm",
-              }),
-              "flex items-center gap-2",
-            )}
+            className="wf-action-btn"
           >
-            <ShuffleIcon size={16} />
+            <ShuffleIcon size={14} strokeWidth={1.75} />
             Edit
           </Link>
+
           <WorkflowActions
             workflowName={workflow.name}
             workflowId={workflow.id}
           />
         </div>
-      </CardContent>
+      </div>
+
+      {/* Last run footer */}
       <LastRunDetails workflow={workflow} />
-    </Card>
+    </div>
   );
 }
+
 function WorkflowActions({
   workflowName,
   workflowId,
@@ -131,25 +200,47 @@ function WorkflowActions({
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant={"outline"} size={"sm"}>
-            <TooltipWrapper content={"More actions"}>
-              <div className="flex items-center justify-center w-full h-full ">
-                <MoreVerticalIcon size={18} />
-              </div>
+          <button
+            className="wf-action-btn"
+            style={{ padding: "0.375rem 0.5rem" }}
+          >
+            <TooltipWrapper content="More actions">
+              <MoreVerticalIcon size={16} />
             </TooltipWrapper>
-          </Button>
+          </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-destructive flex items-center gap-2"
-            onSelect={() => {
-              setShowDeleteDialog((prev) => !prev);
+        <DropdownMenuContent
+          align="end"
+          style={{
+            background: "var(--bg)",
+            border: "1px solid var(--border2)",
+            borderRadius: 12,
+            boxShadow: "var(--sh-lg)",
+          }}
+        >
+          <DropdownMenuLabel
+            style={{
+              fontSize: "0.75rem",
+              color: "var(--tx3)",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
             }}
           >
-            <TrashIcon size={16} />
+            Actions
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            style={{
+              color: "#ef4444",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
+              fontSize: "0.875rem",
+            }}
+            onSelect={() => setShowDeleteDialog(true)}
+          >
+            <TrashIcon size={14} />
             Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -171,24 +262,22 @@ function ScheduleSection({
 }) {
   if (isDraft) return null;
   return (
-    <div className="flex items-center gap-2">
-      <CornerDownRightIcon className="h-4 w-4 text-muted-foreground" />
+    <div className="wf-schedule-row">
+      <CornerDownRightIcon
+        size={13}
+        style={{ color: "var(--tx3)", flexShrink: 0 }}
+      />
       <SchedulerDialog
         workflowId={workflowId}
         cron={cron}
         key={`${cron}-${workflowId}`}
       />
-      <MoveRightIcon className="h-4 w-4 text-muted-foreground" />
-      <TooltipWrapper content="Credit consumption for full run">
-        <div className="flex items-center gap-3">
-          <Badge
-            variant={"outline"}
-            className="space-x-2 text-muted-foreground rounded-sm"
-          >
-            <CoinsIcon className="h-4 w-4" />
-            <span className="text-sm">{creditsCost}</span>
-          </Badge>
-        </div>
+      <MoveRightIcon size={13} style={{ color: "var(--tx3)" }} />
+      <TooltipWrapper content="Credit cost for full run">
+        <span className="wf-credits-pill">
+          <CoinsIcon size={11} />
+          {creditsCost}
+        </span>
       </TooltipWrapper>
     </div>
   );
@@ -196,49 +285,67 @@ function ScheduleSection({
 
 function LastRunDetails({ workflow }: { workflow: Workflow }) {
   const isDraft = workflow.status === WorkflowStatus.DRAFT;
-  if (isDraft) {
-    return null;
-  }
-  const { lastRunAt, lastRunStatus, lastRunId, nextRunAt } = workflow;
-  const formattedStartedAt =
-    lastRunAt && formatDistanceToNow(lastRunAt, { addSuffix: true });
+  if (isDraft) return null;
 
+  const { lastRunAt, lastRunStatus, lastRunId, nextRunAt } = workflow;
+  const formattedStartedAt = lastRunAt
+    ? formatDistanceToNow(lastRunAt, { addSuffix: true })
+    : null;
   const nextSchedule = nextRunAt && format(nextRunAt, "yyyy-MM-dd HH:mm");
   const nextScheduleUTC =
     nextRunAt && formatInTimeZone(nextRunAt, "UTC", "HH:mm");
+
   return (
-    <div className="bg-primary/5 px-4 py-1 flex justify-between items-center text-muted-foreground">
-      <div className="flex items-center text-sm gap-2">
-        {lastRunAt && (
+    <div className="wf-lastrun">
+      <div>
+        {lastRunAt ? (
           <Link
             href={`/workflow/runs/${workflow.id}/${lastRunId}`}
-            className="flex items-center text-sm gap-2 group:"
+            className="wf-lastrun-link"
           >
-            <span>Last run:</span>
+            <span className="wf-lastrun-label">Last run:</span>
             <ExecutionStatusIndicator
               status={lastRunStatus as WorkflowExecutionStatus}
             />
             <ExecutionStatusLabel
               status={lastRunStatus as WorkflowExecutionStatus}
             />
-            <span>{formattedStartedAt}</span>
-            <ChevronRightIcon
-              size={14}
-              className="-translate-x-[2px]  group-hover:translate-x-0"
-            />
+            <span style={{ color: "var(--tx3)" }}>{formattedStartedAt}</span>
+            <ChevronRightIcon size={12} />
           </Link>
+        ) : (
+          <span style={{ fontSize: "0.78rem", color: "var(--tx3)" }}>
+            No runs yet
+          </span>
         )}
-        {!lastRunAt && <p>No runs yet</p>}
       </div>
+
       {nextRunAt && (
-        <div className="flex items-center text-sm gap-2">
-          <ClockIcon size={12} />
-          <span>Next run at:</span>
-          <span>{nextSchedule}</span>
-          <span className="text-sm">({nextScheduleUTC} UTC)</span>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            fontSize: "0.75rem",
+            color: "var(--tx3)",
+          }}
+        >
+          <ClockIcon size={11} />
+          <span>Next:</span>
+          <span
+            style={{
+              color: "var(--tx2)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "0.72rem",
+            }}
+          >
+            {nextSchedule}
+          </span>
+          <span>({nextScheduleUTC} UTC)</span>
         </div>
       )}
     </div>
   );
 }
+
 export default WorkflowCard;

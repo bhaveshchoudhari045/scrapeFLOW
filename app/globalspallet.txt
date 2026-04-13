@@ -1,0 +1,155 @@
+/* ── Indigo ── */
+html[data-palette="indigo"] {
+  --p-h: 239;
+  --p-s: 84%;
+  --p-l: 67%;
+  --p-accent: hsl(239 84% 67%);
+  --p-accent-lt: hsl(239 84% 80%);
+  --p-accent-dim: hsl(239 84% 67% / 0.12);
+  --p-accent-glow: hsl(239 84% 67% / 0.28);
+  --p-hi: #6366f1;
+  --p-hi-lt: #a5a7ff;
+}
+
+/* ── Teal ── */
+html[data-palette="teal"] {
+  --p-h: 174;
+  --p-s: 80%;
+  --p-l: 40%;
+  --p-accent: hsl(174 80% 40%);
+  --p-accent-lt: hsl(174 80% 65%);
+  --p-accent-dim: hsl(174 80% 40% / 0.12);
+  --p-accent-glow: hsl(174 80% 40% / 0.28);
+  --p-hi: #14b8a6;
+  --p-hi-lt: #5eead4;
+}
+
+/* ── Violet ── */
+html[data-palette="violet"] {
+  --p-h: 258;
+  --p-s: 90%;
+  --p-l: 66%;
+  --p-accent: hsl(258 90% 66%);
+  --p-accent-lt: hsl(258 90% 80%);
+  --p-accent-dim: hsl(258 90% 66% / 0.12);
+  --p-accent-glow: hsl(258 90% 66% / 0.28);
+  --p-hi: #8b5cf6;
+  --p-hi-lt: #c4b5fd;
+}
+
+/* ── Rosewood ── */
+html[data-palette="rosewood"] {
+  --p-h: 341;
+  --p-s: 76%;
+  --p-l: 31%;
+  --p-accent: hsl(341 76% 31%);
+  --p-accent-lt: hsl(341 76% 55%);
+  --p-accent-dim: hsl(341 76% 31% / 0.12);
+  --p-accent-glow: hsl(341 76% 31% / 0.28);
+  --p-hi: #881337;
+  --p-hi-lt: #fb7185;
+}
+
+/* ── Charcoal ── */
+html[data-palette="charcoal"] {
+  --p-h: 191;
+  --p-s: 34%;
+  --p-l: 28%;
+  --p-accent: hsl(191 34% 28%);
+  --p-accent-lt: hsl(191 34% 55%);
+  --p-accent-dim: hsl(191 34% 28% / 0.12);
+  --p-accent-glow: hsl(191 34% 28% / 0.28);
+  --p-hi: #264653;
+  --p-hi-lt: #5c7c89;
+}
+
+/* ── Cobalt ── */
+html[data-palette="cobalt"] {
+  --p-h: 231;
+  --p-s: 100%;
+  --p-l: 62%;
+  --p-accent: hsl(231 100% 62%);
+  --p-accent-lt: hsl(231 100% 78%);
+  --p-accent-dim: hsl(231 100% 62% / 0.12);
+  --p-accent-glow: hsl(231 100% 62% / 0.28);
+  --p-hi: #3d5afe;
+  --p-hi-lt: #8fa4ff;
+}
+
+/* ── Coral ── */
+html[data-palette="coral"] {
+  --p-h: 6;
+  --p-s: 100%;
+  --p-l: 69%;
+  --p-accent: hsl(6 100% 69%);
+  --p-accent-lt: hsl(6 100% 82%);
+  --p-accent-dim: hsl(6 100% 69% / 0.12);
+  --p-accent-glow: hsl(6 100% 69% / 0.28);
+  --p-hi: #ff6f61;
+  --p-hi-lt: #ffb4a8;
+}
+
+/* ── Olive ── */
+html[data-palette="olive"] {
+  --p-h: 74;
+  --p-s: 40%;
+  --p-l: 37%;
+  --p-accent: hsl(74 40% 37%);
+  --p-accent-lt: hsl(74 40% 60%);
+  --p-accent-dim: hsl(74 40% 37% / 0.12);
+  --p-accent-glow: hsl(74 40% 37% / 0.28);
+  --p-hi: #708238;
+  --p-hi-lt: #a3b86b;
+}
+
+/* ── Plum ── */
+html[data-palette="plum"] {
+  --p-h: 306;
+  --p-s: 34%;
+  --p-l: 42%;
+  --p-accent: hsl(306 34% 42%);
+  --p-accent-lt: hsl(306 34% 65%);
+  --p-accent-dim: hsl(306 34% 42% / 0.12);
+  --p-accent-glow: hsl(306 34% 42% / 0.28);
+  --p-hi: #8e4585;
+  --p-hi-lt: #c084c0;
+}
+
+/* ── Steel ── */
+html[data-palette="steel"] {
+  --p-h: 207;
+  --p-s: 44%;
+  --p-l: 49%;
+  --p-accent: hsl(207 44% 49%);
+  --p-accent-lt: hsl(207 44% 70%);
+  --p-accent-dim: hsl(207 44% 49% / 0.12);
+  --p-accent-glow: hsl(207 44% 49% / 0.28);
+  --p-hi: #4682b4;
+  --p-hi-lt: #8fb6da;
+}
+
+/* ── Gold ── */
+html[data-palette="gold"] {
+  --p-h: 51;
+  --p-s: 100%;
+  --p-l: 50%;
+  --p-accent: hsl(51 100% 50%);
+  --p-accent-lt: hsl(51 100% 70%);
+  --p-accent-dim: hsl(51 100% 50% / 0.12);
+  --p-accent-glow: hsl(51 100% 50% / 0.28);
+  --p-hi: #ffd700;
+  --p-hi-lt: #ffe680;
+}
+
+/* ── Grape ── */
+html[data-palette="grape"] {
+  --p-h: 273;
+  --p-s: 57%;
+  --p-l: 41%;
+  --p-accent: hsl(273 57% 41%);
+  --p-accent-lt: hsl(273 57% 65%);
+  --p-accent-dim: hsl(273 57% 41% / 0.12);
+  --p-accent-glow: hsl(273 57% 41% / 0.28);
+  --p-hi: #6f2da8;
+  --p-hi-lt: #b084e3;
+}

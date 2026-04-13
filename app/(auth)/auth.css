@@ -1,0 +1,468 @@
+/* ================================================================
+   AUTH LAYOUT — Premium split-screen
+   ================================================================ */
+
+.auth-root {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--base);
+  color: var(--tx1);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+
+.dark .auth-root {
+  background: var(--base-dark);
+  color: var(--tx1-dark);
+}
+
+/* ── Left panel ─────────────────────────────────────────────── */
+.auth-left {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2.5rem;
+  background: #050508;
+  overflow: hidden;
+}
+
+/* Mesh glow */
+.auth-left::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 90% 90% at 20% 20%,
+      hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.15),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 70% 70% at 85% 85%,
+      hsl(var(--accent-h) var(--accent-s) 30% / 0.1),
+      transparent 55%
+    );
+  animation: auth-glow 18s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes auth-glow {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+/* Noise grain */
+.auth-left::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+  opacity: 0.035;
+  pointer-events: none;
+}
+
+.auth-left-content {
+  position: relative;
+  z-index: 2;
+}
+
+/* Logo */
+.auth-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.auth-logo-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: white;
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  box-shadow: 0 0 24px
+    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.4);
+}
+
+.auth-logo-text {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f4f4f5;
+  letter-spacing: -0.02em;
+}
+
+/* Tagline */
+.auth-tagline {
+  position: relative;
+  z-index: 2;
+}
+
+.auth-tagline h2 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.5vw, 3.25rem);
+  font-weight: 800;
+  color: #f4f4f5;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  margin-bottom: 1rem;
+}
+
+.auth-tagline h2 span {
+  background: linear-gradient(135deg, var(--accent), var(--hi-dark, #818cf8));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.auth-tagline p {
+  font-size: 0.875rem;
+  color: rgba(244, 244, 245, 0.45);
+  line-height: 1.7;
+  max-width: 340px;
+}
+
+/* Feature list */
+.auth-features {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.auth-feature {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  color: rgba(244, 244, 245, 0.5);
+  font-weight: 400;
+}
+
+.auth-feature-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  box-shadow: 0 0 8px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.6);
+}
+
+/* Decorative grid lines */
+.auth-grid-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.auth-grid-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.04) 20%,
+    rgba(255, 255, 255, 0.04) 80%,
+    transparent
+  );
+}
+
+/* Vertical lines */
+.auth-grid-lines::before,
+.auth-grid-lines::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255, 255, 255, 0.04) 20%,
+    rgba(255, 255, 255, 0.04) 80%,
+    transparent
+  );
+}
+
+.auth-grid-lines::before {
+  left: 25%;
+}
+.auth-grid-lines::after {
+  left: 65%;
+}
+
+/* ── Right panel ────────────────────────────────────────────── */
+.auth-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2.5rem;
+  background: var(--base);
+  position: relative;
+}
+
+.dark .auth-right {
+  background: var(--base-dark);
+}
+
+/* Subtle top accent line */
+.auth-right::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.4),
+    transparent
+  );
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+}
+
+/* ── Clerk component overrides ──────────────────────────────── */
+.auth-clerk-wrap :global(.cl-rootBox) {
+  width: 100% !important;
+}
+
+.auth-clerk-wrap :global(.cl-card) {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Hide default Clerk header since we have our own */
+.auth-clerk-wrap :global(.cl-headerTitle),
+.auth-clerk-wrap :global(.cl-headerSubtitle),
+.auth-clerk-wrap :global(.cl-header) {
+  display: none !important;
+}
+
+/* Primary button */
+.auth-clerk-wrap :global(.cl-formButtonPrimary) {
+  background: var(--accent) !important;
+  box-shadow: 0 4px 16px
+    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.3) !important;
+  border-radius: var(--r) !important;
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  letter-spacing: -0.01em !important;
+  transition: all 0.2s !important;
+  border: none !important;
+  height: 42px !important;
+}
+
+.auth-clerk-wrap :global(.cl-formButtonPrimary:hover) {
+  opacity: 0.9 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 8px 24px
+    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.4) !important;
+}
+
+/* Inputs */
+.auth-clerk-wrap :global(.cl-formFieldInput) {
+  border-radius: var(--r) !important;
+  border: 1px solid var(--br2) !important;
+  background: var(--surface) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.875rem !important;
+  color: var(--tx1) !important;
+  height: 42px !important;
+  transition: all 0.2s !important;
+}
+
+.dark .auth-clerk-wrap :global(.cl-formFieldInput) {
+  border-color: var(--br-dark) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--tx1-dark) !important;
+}
+
+.auth-clerk-wrap :global(.cl-formFieldInput:focus) {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px
+    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.12) !important;
+  outline: none !important;
+}
+
+/* Labels */
+.auth-clerk-wrap :global(.cl-formFieldLabel) {
+  font-family: var(--font-body) !important;
+  font-size: 0.82rem !important;
+  font-weight: 500 !important;
+  color: var(--tx2) !important;
+  margin-bottom: 0.375rem !important;
+}
+
+.dark .auth-clerk-wrap :global(.cl-formFieldLabel) {
+  color: var(--tx2-dark) !important;
+}
+
+/* Footer link */
+.auth-clerk-wrap :global(.cl-footerActionLink) {
+  color: var(--accent) !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+}
+
+.dark .auth-clerk-wrap :global(.cl-footerActionLink) {
+  color: var(--accent-dark) !important;
+}
+
+.auth-clerk-wrap :global(.cl-footerActionLink:hover) {
+  text-decoration: underline !important;
+}
+
+/* Social buttons */
+.auth-clerk-wrap :global(.cl-socialButtonsBlockButton) {
+  border: 1px solid var(--br2) !important;
+  border-radius: var(--r) !important;
+  background: var(--surface) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--tx1) !important;
+  height: 42px !important;
+  transition: all 0.2s !important;
+}
+
+.dark .auth-clerk-wrap :global(.cl-socialButtonsBlockButton) {
+  border-color: var(--br-dark) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--tx1-dark) !important;
+}
+
+.auth-clerk-wrap :global(.cl-socialButtonsBlockButton:hover) {
+  border-color: var(--accent) !important;
+  background: var(--accent-dim) !important;
+}
+
+/* Divider */
+.auth-clerk-wrap :global(.cl-dividerText) {
+  color: var(--tx3) !important;
+  font-size: 0.75rem !important;
+}
+
+.dark .auth-clerk-wrap :global(.cl-dividerText) {
+  color: var(--tx3-dark) !important;
+}
+
+.auth-clerk-wrap :global(.cl-dividerLine) {
+  background: var(--br2) !important;
+}
+
+.dark .auth-clerk-wrap :global(.cl-dividerLine) {
+  background: var(--br-dark) !important;
+}
+
+/* Error */
+.auth-clerk-wrap :global(.cl-formFieldErrorText) {
+  color: var(--danger) !important;
+  font-size: 0.78rem !important;
+  font-family: var(--font-body) !important;
+}
+
+/* Footer */
+.auth-footer-text {
+  margin-top: 2rem;
+  font-size: 0.78rem;
+  color: var(--tx3);
+  text-align: center;
+  max-width: 300px;
+}
+
+.dark .auth-footer-text {
+  color: var(--tx3-dark);
+}
+
+.auth-footer-text a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.dark .auth-footer-text a {
+  color: var(--accent-dark);
+}
+
+.auth-footer-text a:hover {
+  text-decoration: underline;
+}
+
+/* Custom heading above Clerk form */
+.auth-form-heading {
+  margin-bottom: 1.75rem;
+}
+
+.auth-form-heading h1 {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--tx1);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 0.375rem;
+}
+
+.dark .auth-form-heading h1 {
+  color: var(--tx1-dark);
+}
+
+.auth-form-heading p {
+  font-size: 0.875rem;
+  color: var(--tx3);
+  line-height: 1.6;
+}
+
+.dark .auth-form-heading p {
+  color: var(--tx3-dark);
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .auth-root {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-left {
+    display: none;
+  }
+
+  .auth-right {
+    padding: 2rem 1.25rem;
+    min-height: 100vh;
+  }
+
+  .auth-right::before {
+    display: none;
+  }
+}

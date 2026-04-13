@@ -1,0 +1,415 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  height: 4.35rem;
+  width: 100%;
+}
+/* ================================================================
+   DASHBOARD CSS — Premium Dual-Color Theme
+   Fixed layout, enhanced depth, complementary color pairs
+   ================================================================ */
+
+/* ══════════════════════════════════════════════════════════════
+   SIDEBAR — Premium Glass Effect with Dual-Color Accents
+   ══════════════════════════════════════════════════════════════ */
+
+/* Target the sidebar container */
+div.min-w-\[280px\] {
+  background: var(--bg-surface) !important;
+  border-right: 2px solid var(--border) !important;
+  color: var(--tx-primary) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  box-shadow:
+    4px 0 24px rgba(0, 0, 0, 0.08),
+    2px 0 12px var(--primary-glow) !important;
+}
+
+.dark div.min-w-\[280px\] {
+  background: rgba(28, 31, 43, 0.95) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+  border-right-color: var(--border) !important;
+  color: var(--tx-primary) !important;
+  box-shadow:
+    4px 0 32px rgba(0, 0, 0, 0.5),
+    2px 0 16px var(--primary-glow) !important;
+}
+
+/* Dual-color gradient top accent */
+div.min-w-\[280px\]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--primary),
+    var(--secondary),
+    transparent
+  );
+  opacity: 0.9;
+  z-index: 10;
+  box-shadow: 0 2px 8px var(--primary-glow);
+}
+
+/* Ambient glow effect in dark mode */
+.dark div.min-w-\[280px\]::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -20%;
+  width: 140%;
+  height: 200%;
+  background: radial-gradient(
+    ellipse at center,
+    var(--primary-dim) 0%,
+    transparent 60%
+  );
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 0;
+  animation: ambient-pulse 8s ease-in-out infinite alternate;
+}
+
+@keyframes ambient-pulse {
+  0% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.4;
+    transform: scale(1.1);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SIDEBAR NAV LINKS — Dual-Color Interaction
+   ══════════════════════════════════════════════════════════════ */
+
+div.min-w-\[280px\] a[class*="inline-flex"],
+div.min-w-\[280px\] a {
+  color: var(--tx-secondary) !important;
+  border-radius: var(--radius-md) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  text-decoration: none !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+div.min-w-\[280px\] a:hover {
+  background: var(--primary-dim) !important;
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+  transform: translateX(4px) !important;
+  box-shadow: 0 4px 12px var(--primary-glow) !important;
+}
+
+/* Active link — Dual-color gradient background */
+div.min-w-\[280px\] a[class*="bg-primary"],
+div.min-w-\[280px\] a[data-active="true"],
+div.min-w-\[280px\] a.bg-primary\/10 {
+  background: linear-gradient(
+    135deg,
+    var(--primary-dim) 0%,
+    var(--secondary-dim) 100%
+  ) !important;
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 16px var(--primary-glow) !important;
+}
+
+/* Active left-bar indicator with dual colors */
+div.min-w-\[280px\] a[class*="bg-primary"]::before,
+div.min-w-\[280px\] a[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, var(--primary), var(--secondary));
+  box-shadow: 2px 0 8px var(--primary-glow);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   APP HEADER — Premium Depth
+   ══════════════════════════════════════════════════════════════ */
+
+.app-shell .flex-col header,
+.app-shell header {
+  background: var(--bg-overlay) !important;
+  border-bottom: 2px solid var(--border) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  color: var(--tx-primary) !important;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.08),
+    0 2px 8px var(--primary-glow) !important;
+}
+
+.dark .app-shell .flex-col header,
+.dark .app-shell header {
+  background: rgba(15, 17, 21, 0.95) !important;
+  border-bottom-color: var(--border) !important;
+  box-shadow:
+    0 4px 32px rgba(0, 0, 0, 0.5),
+    0 2px 12px var(--primary-glow) !important;
+}
+
+/* Gradient accent line */
+.app-shell header::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--primary),
+    var(--secondary),
+    transparent
+  );
+  opacity: 0.6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CARDS — Premium Depth with Dual-Color Glow
+   ══════════════════════════════════════════════════════════════ */
+
+.stat-card,
+.chart-card,
+.balance-card,
+.wf-card-root,
+.credit-card,
+.cred-card,
+.glass-card {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.dark .stat-card,
+.dark .chart-card,
+.dark .balance-card,
+.dark .wf-card-root,
+.dark .credit-card,
+.dark .cred-card,
+.dark .glass-card {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+}
+
+/* Dual-color top accent */
+.stat-card::before,
+.chart-card::before,
+.balance-card::before,
+.wf-card-root::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.stat-card:hover,
+.chart-card:hover,
+.balance-card:hover,
+.wf-card-root:hover,
+.credit-card:hover {
+  border-color: var(--primary) !important;
+  transform: translateY(-4px) scale(1.01) !important;
+  box-shadow: var(--shadow-primary) !important;
+}
+
+.stat-card:hover::before,
+.chart-card:hover::before,
+.balance-card:hover::before,
+.wf-card-root:hover::before {
+  opacity: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BUTTONS — Premium Dual-Color Styling
+   ══════════════════════════════════════════════════════════════ */
+
+/* Primary button with gradient */
+.btn-primary,
+.create-btn,
+.purchase-btn,
+button.bg-primary {
+  background: linear-gradient(
+    135deg,
+    var(--primary) 0%,
+    var(--secondary) 100%
+  ) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: var(--shadow-primary) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.btn-primary:hover,
+.create-btn:hover,
+.purchase-btn:hover,
+button.bg-primary:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: var(--shadow-primary), var(--shadow-xl) !important;
+}
+
+/* Secondary button with border */
+.btn-secondary,
+.btn-ghost {
+  background: var(--secondary-dim) !important;
+  color: var(--secondary) !important;
+  border: 2px solid var(--secondary) !important;
+  box-shadow: var(--shadow-secondary) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.btn-secondary:hover,
+.btn-ghost:hover {
+  background: var(--secondary) !important;
+  color: white !important;
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: var(--shadow-secondary), var(--shadow-lg) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INPUTS — Premium Focus States
+   ══════════════════════════════════════════════════════════════ */
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none !important;
+  border-color: var(--primary) !important;
+  box-shadow:
+    0 0 0 4px var(--primary-dim),
+    0 4px 12px var(--primary-glow) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   STATS & METRICS
+   ══════════════════════════════════════════════════════════════ */
+
+.stat-card-value,
+.balance-card-value {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 4px 12px var(--primary-glow);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PAGE TRANSITIONS
+   ══════════════════════════════════════════════════════════════ */
+
+.page-content > * {
+  animation: page-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.page-content > *:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.page-content > *:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.page-content > *:nth-child(3) {
+  animation-delay: 0.15s;
+}
+.page-content > *:nth-child(4) {
+  animation-delay: 0.2s;
+}
+.page-content > *:nth-child(5) {
+  animation-delay: 0.25s;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PREMIUM DEPTH LAYERS
+   ══════════════════════════════════════════════════════════════ */
+
+.layer-1 {
+  box-shadow: var(--shadow-sm) !important;
+}
+.layer-2 {
+  box-shadow: var(--shadow-md) !important;
+}
+.layer-3 {
+  box-shadow: var(--shadow-lg) !important;
+}
+.layer-elevated {
+  box-shadow: var(--shadow-xl) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   AIXPLORE PANEL — Dual-Color Integration
+   ══════════════════════════════════════════════════════════════ */
+
+.ax-panel-root {
+  border: 2px solid var(--border) !important;
+  box-shadow:
+    var(--shadow-xl),
+    0 0 40px var(--primary-glow) !important;
+}
+
+.ax-panel-root::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  z-index: 10;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE ADJUSTMENTS
+   ══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  div.min-w-\[280px\] {
+    box-shadow: none !important;
+  }
+
+  .stat-card:hover,
+  .chart-card:hover {
+    transform: translateY(-2px) scale(1.005) !important;
+  }
+}

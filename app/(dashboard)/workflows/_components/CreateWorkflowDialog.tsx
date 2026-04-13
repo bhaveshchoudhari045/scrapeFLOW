@@ -34,9 +34,11 @@ import { toast } from "sonner";
 function CreateWorkflowDialog({
   triggerText,
   defaultOpen = false,
+  children,
 }: {
   triggerText?: string;
   defaultOpen?: boolean;
+  children?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const form = useForm<createWorkflowSchemaType>({
@@ -80,7 +82,11 @@ function CreateWorkflowDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button>{triggerText ?? "Create workflow"}</Button>
+        {children ? (
+          children
+        ) : (
+          <Button>{triggerText ?? "Create workflow"}</Button>
+        )}
       </DialogTrigger>
       <DialogContent className="px-0">
         <CustomDialogHeader

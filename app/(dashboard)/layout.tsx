@@ -6,29 +6,26 @@ import React from "react";
 import { SignedIn, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { AmbientCanvas } from "@/components/AmbientCanvas";
-
+import "@/app/dashboard.css";
 async function layout({ children }: { children: React.ReactNode }) {
   const { userId } = auth();
   if (!userId) redirect("/");
 
   return (
-    <div className="flex h-screen">
-      {/* <AmbientCanvas /> */}
+    <div className="app-shell">
       <DesktopSidebar />
-      <div className="flex flex-col flex-1 min-h-screen">
-        <header className="flex items-center justify-between px-6 py-4 h-[50px] container">
+      <div className="flex flex-col flex-1 min-h-screen overflow-hidden">
+        <header className="app-header justify-between">
           <BreadcrumbHeader />
-          <div className="gap-1 flex items-center">
-            <ModeToggle />
+          <div className="gap-2 flex items-center">
             <SignedIn>
               <UserButton />
             </SignedIn>
           </div>
         </header>
         <Separator />
-        <div className="overflow-auto">
-          <div className="flex-1 container p-8 py-4 text-accent-foreground">
+        <div className="overflow-auto flex-1">
+          <div className="page-content container p-8 py-6 text-accent-foreground">
             {children}
           </div>
         </div>

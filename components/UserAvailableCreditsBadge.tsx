@@ -24,8 +24,8 @@ function UserAvailableCreditsBadge() {
         buttonVariants({ variant: "outline" }),
       )}
     >
-      <CoinsIcon size={20} className="text-primary" />
-      <span className="font-semibold capitalize">
+      <CoinsIcon size={20} className="text-primary " />
+      <span className="font-semibold capitalize text-green-500  text-xl  ">
         {query.isLoading && <Loader2Icon className="w-4 h-4 animate-spin" />}
         {!query.isLoading && query.data && (
           <ReactCountUpWrapper value={query.data} />
