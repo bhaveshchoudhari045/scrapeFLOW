@@ -39,7 +39,6 @@ const PLANS = [
   },
 ];
 
-// Declare Razorpay type for TypeScript
 declare global {
   interface Window {
     Razorpay: any;
@@ -50,52 +49,39 @@ export default function CreditsPurchase() {
   const [selected, setSelected] = useState("MEDIUM");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
   const selectedPlan = PLANS.find((p) => p.id === selected)!;
 
   async function handlePurchase() {
     if (loading) return;
     setLoading(true);
-
     try {
-      // Create Razorpay order
       const orderData = await PurchaseCredits(selected as any);
-
-      // Check if Razorpay is loaded
       if (typeof window.Razorpay === "undefined") {
-        toast.error("Payment system not loaded. Please refresh the page.");
+        toast.error("Payment system not loaded. Please refresh.");
         setLoading(false);
         return;
       }
-
-      // Initialize Razorpay checkout
       const options = {
         key: orderData.keyId,
         amount: orderData.amount,
         currency: orderData.currency,
         order_id: orderData.orderId,
         name: "FlowScrape",
-        description: `${selectedPlan.name} - ${selectedPlan.credits} credits`,
-        image: "/logo.png", // Add your logo if available
+        description: `${selectedPlan.name} — ${selectedPlan.credits.toLocaleString()} credits`,
         handler: async function (response: any) {
-          console.log("Payment success:", response);
           setLoading(true);
-
           try {
             const result = await fetch("/api/billing/complete-purchase", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                packId: selected.toUpperCase(), // ← fix casing
+                packId: selected.toUpperCase(),
                 paymentId: response.razorpay_payment_id,
                 orderId: response.razorpay_order_id,
                 razorpaySignature: response.razorpay_signature,
               }),
             });
-
             const data = await result.json();
-            console.log("API response:", data);
-
             if (data.success) {
               toast.success(
                 `✓ ${selectedPlan.credits.toLocaleString()} credits added!`,
@@ -104,48 +90,31 @@ export default function CreditsPurchase() {
             } else {
               toast.error(data.error || "Something went wrong");
             }
-          } catch (error: any) {
-            console.error("Error:", error);
+          } catch {
             toast.error("Failed to add credits");
           } finally {
             setLoading(false);
           }
         },
-        prefill: {
-          name: "",
-          email: "",
-          contact: "",
-        },
-        theme: {
-          color: "#10b981", // Emerald color matching your brand
-        },
+        theme: { color: "var(--accent, #3d5afe)" },
         modal: {
-          ondismiss: function () {
+          ondismiss: () => {
             setLoading(false);
             toast.info("Payment cancelled");
           },
         },
       };
-
       const razorpay = new window.Razorpay(options);
       razorpay.open();
     } catch (error: any) {
-      console.error("Purchase error:", error);
       toast.error(error.message || "Failed to initiate payment");
       setLoading(false);
     }
   }
 
   return (
-    <div
-      style={{
-        background: "var(--bg)",
-        border: "1px solid var(--border)",
-        borderRadius: 16,
-        padding: "1.5rem",
-        marginBottom: "1.5rem",
-      }}
-    >
+    <div className="credit-section">
+      {/* Header */}
       <div className="section-header">
         <div className="section-header-icon">
           <CreditCard size={18} strokeWidth={1.75} />
@@ -158,6 +127,7 @@ export default function CreditsPurchase() {
         </div>
       </div>
 
+      {/* Plan grid */}
       <div className="credit-grid">
         {PLANS.map((plan) => {
           const Icon = plan.icon;
@@ -165,15 +135,18 @@ export default function CreditsPurchase() {
           return (
             <button
               key={plan.id}
+              /* FIXED: className drives the selected state now */
               className={`credit-card${isSelected ? " selected" : ""}`}
               onClick={() => setSelected(plan.id)}
               type="button"
               disabled={loading}
             >
-              {/* Badge or checkmark */}
+              {/* Badge — only when not selected */}
               {plan.badge && !isSelected && (
                 <span className="credit-card-badge">{plan.badge}</span>
               )}
+
+              {/* Checkmark — only when selected */}
               <span className="credit-card-check">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path
@@ -186,20 +159,9 @@ export default function CreditsPurchase() {
                 </svg>
               </span>
 
+              {/* Icon — FIXED: uses CSS classes, not dead --accent-cur */}
               <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 10,
-                  background: isSelected ? "var(--accent-cur)" : "var(--bg2)",
-                  border: `1px solid ${isSelected ? "transparent" : "var(--border)"}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: "0.875rem",
-                  color: isSelected ? "white" : "var(--tx3)",
-                  transition: "all 0.2s",
-                }}
+                className={`credit-card-icon ${isSelected ? "selected" : "idle"}`}
               >
                 <Icon size={18} strokeWidth={1.75} />
               </div>
@@ -215,29 +177,31 @@ export default function CreditsPurchase() {
         })}
       </div>
 
+      {/* Purchase button */}
       <button
         className="purchase-btn"
         onClick={handlePurchase}
         disabled={loading}
         style={{
-          opacity: loading ? 0.6 : 1,
+          opacity: loading ? 0.65 : 1,
           cursor: loading ? "not-allowed" : "pointer",
         }}
       >
         {loading ? (
           <>
-            <div
-              className="spinner"
+            <span
               style={{
                 width: 18,
                 height: 18,
-                border: "2px solid rgba(255,255,255,0.3)",
+                flexShrink: 0,
+                border: "2px solid rgba(255,255,255,0.35)",
                 borderTopColor: "white",
                 borderRadius: "50%",
+                display: "inline-block",
                 animation: "spin 0.6s linear infinite",
               }}
             />
-            Processing...
+            Processing…
           </>
         ) : (
           <>

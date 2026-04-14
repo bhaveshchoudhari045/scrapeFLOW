@@ -1,0 +1,325 @@
+/* ================================================================
+   FLOWSCRAPE — AUTH LAYOUT CSS
+   Split-screen: left = branded panel, right = form
+   Clerk card is stripped (bg-transparent / shadow-none in appearance)
+   and we provide our own container with full palette theming.
+   ================================================================ */
+
+.auth-root {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-2);
+  font-family: var(--font-body);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ambient dual-color mesh behind everything */
+.auth-root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 900px 700px at 0% 0%,
+      var(--p-dim) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 600px 500px at 100% 100%,
+      var(--a-dim) 0%,
+      transparent 55%
+    );
+  opacity: 0.65;
+}
+
+/* ── LEFT BRAND PANEL ── */
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 44%;
+  min-height: 100vh;
+  padding: 3rem 3.5rem;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* Gradient mesh background on brand panel */
+.auth-brand::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    145deg,
+    hsl(var(--p-h, 38) var(--p-s, 96%) var(--p-l, 52%) / 0.08) 0%,
+    hsl(var(--a-h, 226) var(--a-s, 92%) var(--a-l, 58%) / 0.05) 100%
+  );
+  pointer-events: none;
+}
+/* Decorative circle */
+.auth-brand::after {
+  content: "";
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  right: -160px;
+  bottom: -160px;
+  background: radial-gradient(
+    circle,
+    hsl(var(--p-h, 38) var(--p-s, 96%) var(--p-l, 52%) / 0.12) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.auth-brand-top {
+  position: relative;
+  z-index: 1;
+}
+.auth-brand-mid {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3rem 0;
+}
+.auth-brand-bottom {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-brand-tagline {
+  font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+  font-weight: 800;
+  font-family: var(--font-display);
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  color: var(--tx1);
+  margin: 0 0 1rem;
+}
+.auth-brand-tagline-accent {
+  background-image: linear-gradient(
+    135deg,
+    var(--primary-lt),
+    var(--primary-dp)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 8px var(--primary-glow));
+}
+.auth-brand-desc {
+  font-size: 0.9375rem;
+  color: var(--tx2);
+  line-height: 1.7;
+  max-width: 320px;
+  margin: 0 0 2rem;
+}
+
+/* Feature pills */
+.auth-features {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+.auth-feature {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-sm);
+  transition: all 0.2s ease;
+}
+.auth-feature:hover {
+  box-shadow: var(--sh-md);
+  border-color: hsl(var(--p-h, 38) var(--p-s, 96%) var(--p-l, 52%) / 0.2);
+  transform: translateX(3px);
+}
+.auth-feature-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--p-dim), var(--a-dim));
+  box-shadow: 0 2px 6px var(--p-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.auth-feature-text {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--tx2);
+}
+
+.auth-brand-footer {
+  font-size: 0.75rem;
+  color: var(--tx3);
+  line-height: 1.6;
+}
+
+/* ── RIGHT FORM PANEL ── */
+.auth-form-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-form-box {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule2);
+  border-radius: var(--r-xl);
+  padding: 2.5rem 2.25rem;
+  box-shadow: var(--sh-xl);
+  position: relative;
+  overflow: hidden;
+}
+/* Top gradient bar */
+.auth-form-box::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--primary-lt),
+    var(--accent-lt),
+    var(--primary-dp)
+  );
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+}
+
+.auth-form-heading {
+  margin-bottom: 1.75rem;
+}
+.auth-form-heading h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.35rem;
+  background-image: linear-gradient(
+    135deg,
+    var(--primary-lt),
+    var(--primary-dp)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 1px 4px var(--primary-glow));
+  font-family: var(--font-display);
+}
+.auth-form-heading p {
+  font-size: 0.875rem;
+  color: var(--tx3);
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* Override Clerk elements to match our theme */
+.auth-form-box :global(.cl-rootBox) {
+  width: 100% !important;
+}
+.auth-form-box :global(.cl-card) {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+.auth-form-box :global(.cl-headerTitle),
+.auth-form-box :global(.cl-headerSubtitle) {
+  display: none !important;
+}
+
+.auth-form-box :global(.cl-formButtonPrimary) {
+  background: linear-gradient(
+    135deg,
+    var(--accent-lt),
+    var(--accent-dp)
+  ) !important;
+  box-shadow: var(--sh-accent) !important;
+  border: none !important;
+  border-radius: var(--r-sm) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em !important;
+  transition: all 0.2s ease !important;
+}
+.auth-form-box :global(.cl-formButtonPrimary:hover) {
+  filter: brightness(1.1) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: var(--sh-accent-lg) !important;
+}
+
+.auth-form-box :global(.cl-formFieldInput) {
+  background: var(--bg-2) !important;
+  border-color: var(--rule2) !important;
+  color: var(--tx1) !important;
+  border-radius: var(--r-sm) !important;
+}
+.auth-form-box :global(.cl-formFieldInput:focus) {
+  border-color: var(--accent) !important;
+  box-shadow:
+    0 0 0 3px var(--a-dim),
+    0 2px 8px var(--a-glow) !important;
+}
+.auth-form-box :global(.cl-formFieldLabel) {
+  color: var(--tx2) !important;
+}
+.auth-form-box :global(.cl-footerActionLink) {
+  color: var(--primary) !important;
+}
+.auth-form-box :global(.cl-dividerLine) {
+  background: var(--rule) !important;
+}
+.auth-form-box :global(.cl-dividerText) {
+  color: var(--tx3) !important;
+}
+.auth-form-box :global(.cl-socialButtonsBlockButton) {
+  background: var(--bg-2) !important;
+  border-color: var(--rule2) !important;
+  color: var(--tx1) !important;
+  border-radius: var(--r-sm) !important;
+}
+.auth-form-box :global(.cl-socialButtonsBlockButton:hover) {
+  background: var(--p-dim) !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 2px 8px var(--p-glow) !important;
+}
+.auth-form-box :global(.cl-identityPreviewText),
+.auth-form-box :global(.cl-formFieldHintText),
+.auth-form-box :global(.cl-footerActionText) {
+  color: var(--tx3) !important;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .auth-brand {
+    display: none;
+  }
+  .auth-form-panel {
+    padding: 1.5rem 1rem;
+  }
+  .auth-form-box {
+    padding: 2rem 1.5rem;
+    max-width: 100%;
+    border-radius: var(--r-lg);
+  }
+}

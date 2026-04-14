@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { WorkflowExecutionStatus, WorkflowStatus } from "@/types/workflow";
 import { Workflow } from "@prisma/client";
 import {
@@ -40,19 +39,8 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
   const isDraft = workflow.status === WorkflowStatus.DRAFT;
 
   return (
-    <div
-      style={{
-        background: "var(--bg)",
-        border: "1px solid var(--border)",
-        borderRadius: 16,
-        overflow: "hidden",
-        marginBottom: "0.75rem",
-        transition: "all 0.22s cubic-bezier(0.16,1,0.3,1)",
-        position: "relative",
-      }}
-      className="wf-card-root"
-    >
-      {/* Main Content */}
+    <div className="wf-card-root">
+      {/* Main row */}
       <div
         style={{
           padding: "1.125rem 1.375rem",
@@ -62,7 +50,7 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
           gap: "1rem",
         }}
       >
-        {/* Left — icon + info */}
+        {/* Left */}
         <div
           style={{
             display: "flex",
@@ -72,26 +60,8 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
             minWidth: 0,
           }}
         >
-          {/* Status icon */}
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              flexShrink: 0,
-              borderRadius: 11,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: isDraft ? "rgba(234,179,8,0.1)" : "var(--accent-dim)",
-              border: `1px solid ${
-                isDraft
-                  ? "rgba(234,179,8,0.25)"
-                  : "hsl(var(--p-h) var(--p-s) var(--p-l) / 0.25)"
-              }`,
-              color: isDraft ? "#ca8a04" : "var(--accent-cur)",
-              transition: "all 0.2s",
-            }}
-          >
+          {/* Status icon — FIXED: uses .wf-status-icon classes not dead --accent-cur */}
+          <div className={`wf-status-icon ${isDraft ? "draft" : "published"}`}>
             {isDraft ? (
               <FileTextIcon size={18} strokeWidth={1.75} />
             ) : (
@@ -99,34 +69,19 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
             )}
           </div>
 
-          {/* Name + schedule */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 flexWrap: "wrap",
-                gap: "0.25rem",
+                gap: "0.3rem",
               }}
             >
               <TooltipWrapper content={workflow.description}>
                 <Link
                   href={`/workflow/editor/${workflow.id}`}
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "0.9375rem",
-                    fontWeight: 600,
-                    color: "var(--tx1)",
-                    textDecoration: "none",
-                    letterSpacing: "-0.01em",
-                    transition: "color 0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.color = "var(--accent-cur)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.color = "var(--tx1)")
-                  }
+                  className="wf-name-link"
                 >
                   {workflow.name}
                 </Link>
@@ -160,7 +115,6 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
           }}
         >
           {!isDraft && <RunBtn workflowId={workflow.id} />}
-
           <Link
             href={`/workflow/editor/${workflow.id}`}
             className="wf-action-btn"
@@ -168,7 +122,6 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
             <ShuffleIcon size={14} strokeWidth={1.75} />
             Edit
           </Link>
-
           <WorkflowActions
             workflowName={workflow.name}
             workflowId={workflow.id}
@@ -176,7 +129,6 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
         </div>
       </div>
 
-      {/* Last run footer */}
       <LastRunDetails workflow={workflow} />
     </div>
   );
@@ -202,25 +154,17 @@ function WorkflowActions({
         <DropdownMenuTrigger asChild>
           <button
             className="wf-action-btn"
-            style={{ padding: "0.375rem 0.5rem" }}
+            style={{ padding: "0.35rem 0.5rem" }}
           >
             <TooltipWrapper content="More actions">
               <MoreVerticalIcon size={16} />
             </TooltipWrapper>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          style={{
-            background: "var(--bg)",
-            border: "1px solid var(--border2)",
-            borderRadius: 12,
-            boxShadow: "var(--sh-lg)",
-          }}
-        >
+        <DropdownMenuContent align="end" className="wf-dropdown-content">
           <DropdownMenuLabel
             style={{
-              fontSize: "0.75rem",
+              fontSize: "0.72rem",
               color: "var(--tx3)",
               letterSpacing: "0.06em",
               textTransform: "uppercase",
@@ -228,7 +172,7 @@ function WorkflowActions({
           >
             Actions
           </DropdownMenuLabel>
-          <DropdownMenuSeparator />
+          <DropdownMenuSeparator style={{ background: "var(--rule)" }} />
           <DropdownMenuItem
             style={{
               color: "#ef4444",
@@ -319,7 +263,6 @@ function LastRunDetails({ workflow }: { workflow: Workflow }) {
           </span>
         )}
       </div>
-
       {nextRunAt && (
         <div
           style={{

@@ -109,11 +109,11 @@ function FlowEditor({ workflow }: { workflow: Workflow }) {
       const sourceTask = TaskRegistry[source.data.type];
       const targetTask = TaskRegistry[target.data.type];
 
-      const output = sourceTask.outputs.find(
+      const output = sourceTask?.outputs.find(
         (o) => o.name === connection.sourceHandle,
       );
 
-      const input = targetTask.inputs.find(
+      const input = targetTask?.inputs.find(
         (o) => o.name === connection.targetHandle,
       );
 

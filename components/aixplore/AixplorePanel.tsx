@@ -14,212 +14,133 @@ interface Props {
 
 type Tab = "overview" | "data" | "insights" | "charts" | "ml" | "predictions";
 
-// ── Design tokens ─────────────────────────────────────────────────────────
-const C = {
-  cyan: "#00f5ff",
-  violet: "#a78bfa",
-  green: "#34d399",
-  gold: "#f59e0b",
-  red: "#ef4444",
-  pink: "#f472b6",
-  slate: "#94a3b8",
-  dim: "#475569",
-  text: "#e2e8f0",
-  muted: "#64748b",
-  bg0: "#04040a",
-  bg1: "rgba(255,255,255,0.025)",
-  bg2: "rgba(255,255,255,0.04)",
-  border: "rgba(255,255,255,0.07)",
-};
-
-const PALETTE = [
-  "#00f5ff",
-  "#a78bfa",
-  "#34d399",
-  "#f59e0b",
-  "#ef4444",
-  "#f472b6",
-  "#818cf8",
-  "#fb923c",
-  "#4ade80",
-];
-
-function getSiteConfig(siteType: string) {
-  if (siteType === "finance_deep")
-    return { icon: "📈", label: "Stock Analysis", color: C.cyan };
-  if (siteType === "science_space")
-    return { icon: "🔭", label: "NASA Intelligence", color: C.violet };
-  if (siteType === "academic_research")
-    return { icon: "🎓", label: "Research Intel", color: C.violet };
-  if (siteType === "health_medical")
-    return { icon: "🏥", label: "Medical Research", color: C.green };
-  if (siteType === "ecommerce_product")
-    return { icon: "🛒", label: "Product Analysis", color: "#fb923c" };
-  if (siteType === "social_reddit")
-    return { icon: "💬", label: "Community Intel", color: "#ff6b4a" };
-  if (["news", "general_news"].includes(siteType))
-    return { icon: "📰", label: "News Analysis", color: C.slate };
-  return { icon: "◈", label: "Data Intelligence", color: C.cyan };
-}
-
-function signalColor(text: string) {
-  const t = (text ?? "").toLowerCase();
-  if (
-    t.includes("strong buy") ||
-    t.includes("bullish") ||
-    t.includes("buy") ||
-    t.includes("positive") ||
-    t.includes("strong evidence")
-  )
-    return C.green;
-  if (
-    t.includes("strong sell") ||
-    t.includes("bearish") ||
-    t.includes("sell") ||
-    t.includes("negative")
-  )
-    return C.red;
-  if (t.includes("hold") || t.includes("neutral") || t.includes("mixed"))
-    return C.gold;
-  if (t.includes("alert") || t.includes("discovery")) return C.violet;
-  return C.slate;
-}
-
-// ── Shared primitives ─────────────────────────────────────────────────────
-function GlassCard({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
+// ── Read palette colors at runtime from CSS vars ─────────────────────────
+function getCSSVar(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
   return (
-    <div
-      style={{
-        background: C.bg1,
-        border: `1px solid ${C.border}`,
-        borderRadius: 12,
-        padding: "1.25rem",
-        marginBottom: "0.875rem",
-        ...style,
-      }}
-    >
-      {children}
-    </div>
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
+    fallback
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: "0.58rem",
-        letterSpacing: "0.18em",
-        textTransform: "uppercase",
-        color: C.muted,
-        marginBottom: "0.75rem",
-        display: "flex",
-        alignItems: "center",
-        gap: "0.5rem",
-      }}
-    >
-      <div style={{ width: 14, height: 1, background: C.muted }} />
-      {children}
-    </div>
-  );
-}
-
-function Badge({ text, color }: { text: string; color?: string }) {
-  const c = color ?? C.cyan;
-  return (
-    <span
-      style={{
-        fontSize: "0.58rem",
-        padding: "0.18rem 0.5rem",
-        borderRadius: 4,
-        background: `${c}18`,
-        color: c,
-        border: `1px solid ${c}28`,
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {text}
-    </span>
-  );
-}
-
-function ConfBar({ pct, color }: { pct: number; color: string }) {
-  return (
-    <div style={{ marginTop: "0.75rem" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: "0.62rem",
-          color: C.muted,
-          marginBottom: "0.3rem",
-        }}
-      >
-        <span>Confidence</span>
-        <span style={{ color }}>{pct}%</span>
-      </div>
-      <div
-        style={{
-          height: 4,
-          background: "rgba(255,255,255,0.06)",
-          borderRadius: 2,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${pct}%`,
-            background: `linear-gradient(90deg,${color}70,${color})`,
-            borderRadius: 2,
-            transition: "width 1.2s ease",
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Chart renderer — pure SVG/HTML canvas ─────────────────────────────────
-function ChartCard({ chart }: { chart: any }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const W = 520,
-    H = 220;
+function usePaletteColors() {
+  const [colors, setColors] = useState({
+    primary: "#f59e0b",
+    accent: "#3d5afe",
+    tx1: "#0b0c10",
+    tx2: "#4a5068",
+    tx3: "#9299ad",
+    bg: "#ffffff",
+    bgCard: "#ffffff",
+    bg2: "#f5f6f8",
+    rule: "rgba(0,0,0,0.06)",
+    rule2: "rgba(0,0,0,0.10)",
+    pGlow: "rgba(245,158,11,0.28)",
+    aGlow: "rgba(61,91,254,0.24)",
+  });
 
   useEffect(() => {
-    const c = canvasRef.current;
-    if (!c || !chart?.data?.length) return;
-    const ctx = c.getContext("2d")!;
+    function read() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n: string, fb: string) => s.getPropertyValue(n).trim() || fb;
+      setColors({
+        primary: v("--primary", "#f59e0b"),
+        accent: v("--accent", "#3d5afe"),
+        tx1: v("--tx1", "#0b0c10"),
+        tx2: v("--tx2", "#4a5068"),
+        tx3: v("--tx3", "#9299ad"),
+        bg: v("--bg", "#ffffff"),
+        bgCard: v("--bg-card", "#ffffff"),
+        bg2: v("--bg-2", "#f5f6f8"),
+        rule: v("--rule", "rgba(0,0,0,0.06)"),
+        rule2: v("--rule2", "rgba(0,0,0,0.10)"),
+        pGlow: v("--p-glow", "rgba(245,158,11,0.28)"),
+        aGlow: v("--a-glow", "rgba(61,91,254,0.24)"),
+      });
+    }
+    read();
+    // Re-read when palette changes
+    window.addEventListener("palette-change", read);
+    return () => window.removeEventListener("palette-change", read);
+  }, []);
+
+  return colors;
+}
+
+const CHART_PALETTE = [
+  "#f59e0b",
+  "#3d5afe",
+  "#22c55e",
+  "#ef4444",
+  "#a78bfa",
+  "#f472b6",
+  "#0ea5e9",
+  "#fb923c",
+  "#34d399",
+  "#818cf8",
+];
+
+function signalColor(text: string, primary: string, accent: string) {
+  const t = (text ?? "").toLowerCase();
+  if (t.includes("buy") || t.includes("bullish") || t.includes("positive"))
+    return "#22c55e";
+  if (t.includes("sell") || t.includes("bearish") || t.includes("negative"))
+    return "#ef4444";
+  if (t.includes("hold") || t.includes("neutral") || t.includes("mixed"))
+    return "#f59e0b";
+  return primary;
+}
+
+// ── High-DPI canvas chart ─────────────────────────────────────────────────
+function ChartCard({
+  chart,
+  C,
+}: {
+  chart: any;
+  C: ReturnType<typeof usePaletteColors>;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const W = 560;
+  const H = 230;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !chart?.data?.length) return;
+
+    // High-DPI / Retina fix — this is the key fix for blurry charts
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = "100%";
+    canvas.style.height = `${H}px`;
+
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
 
-    const PAD = { top: 20, right: 20, bottom: 50, left: 55 };
+    const PAD = { top: 22, right: 18, bottom: 48, left: 58 };
     const pw = W - PAD.left - PAD.right;
     const ph = H - PAD.top - PAD.bottom;
 
     // Background
-    ctx.fillStyle = "#07071a";
+    ctx.fillStyle = C.bgCard;
     ctx.roundRect(0, 0, W, H, 10);
     ctx.fill();
 
-    // Grid lines
-    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    // Grid
+    ctx.strokeStyle = C.rule;
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
       const y = PAD.top + (ph / 4) * i;
+      ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(PAD.left, y);
       ctx.lineTo(W - PAD.right, y);
       ctx.stroke();
     }
+    ctx.setLineDash([]);
 
-    const color = chart.color || C.cyan;
+    const color = chart.color || C.primary;
     const data = chart.data;
 
     if (chart.type === "bar" || chart.type === "histogram") {
@@ -229,9 +150,8 @@ function ChartCard({ chart }: { chart: any }) {
       const range = maxV - minV || 1;
       const bw = pw / data.length;
 
-      // Y-axis labels
-      ctx.fillStyle = C.muted;
-      ctx.font = "9px monospace";
+      ctx.fillStyle = C.tx3;
+      ctx.font = `10px ${getCSSVar("--font-mono", "monospace")}`;
       ctx.textAlign = "right";
       for (let i = 0; i <= 4; i++) {
         const v = minV + (range / 4) * (4 - i);
@@ -241,32 +161,31 @@ function ChartCard({ chart }: { chart: any }) {
             : v >= 1e3
               ? `${(v / 1e3).toFixed(1)}K`
               : v.toFixed(1),
-          PAD.left - 6,
-          PAD.top + (ph / 4) * i + 3,
+          PAD.left - 7,
+          PAD.top + (ph / 4) * i + 4,
         );
       }
 
       data.forEach((d: any, i: number) => {
         const barH = ((d.y - minV) / range) * ph;
-        const x = PAD.left + i * bw + bw * 0.1;
-        const bwActual = bw * 0.8;
+        const x = PAD.left + i * bw + bw * 0.12;
+        const bwA = bw * 0.76;
         const y = PAD.top + ph - barH;
         const grad = ctx.createLinearGradient(x, y, x, PAD.top + ph);
         grad.addColorStop(0, color);
         grad.addColorStop(1, `${color}22`);
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.roundRect(x, y, bwActual, barH, [3, 3, 0, 0]);
+        ctx.roundRect(x, y, bwA, barH, [4, 4, 0, 0]);
         ctx.fill();
-
-        if (bw > 25) {
-          ctx.fillStyle = C.muted;
-          ctx.font = "8px sans-serif";
+        if (bw > 30) {
+          ctx.fillStyle = C.tx3;
+          ctx.font = "9px sans-serif";
           ctx.textAlign = "center";
           ctx.save();
-          ctx.translate(x + bwActual / 2, PAD.top + ph + 12);
-          ctx.rotate(-Math.PI / 5);
-          ctx.fillText(String(d.x ?? "").slice(0, 12), 0, 0);
+          ctx.translate(x + bwA / 2, PAD.top + ph + 13);
+          ctx.rotate(-Math.PI / 6);
+          ctx.fillText(String(d.x ?? "").slice(0, 10), 0, 0);
           ctx.restore();
         }
       });
@@ -284,59 +203,62 @@ function ChartCard({ chart }: { chart: any }) {
       const minV = Math.min(...vals);
       const range = maxV - minV || 1;
 
-      ctx.fillStyle = C.muted;
-      ctx.font = "9px monospace";
+      ctx.fillStyle = C.tx3;
+      ctx.font = `10px ${getCSSVar("--font-mono", "monospace")}`;
       ctx.textAlign = "right";
       for (let i = 0; i <= 4; i++) {
         const v = maxV - (range / 4) * i;
         ctx.fillText(
           v >= 1e3 ? `${(v / 1e3).toFixed(1)}K` : v.toFixed(1),
-          PAD.left - 6,
-          PAD.top + (ph / 4) * i + 3,
+          PAD.left - 7,
+          PAD.top + (ph / 4) * i + 4,
         );
       }
 
-      const pts = vals.map((v:any, i:any) => ({
+      const pts = vals.map((v: number, i: number) => ({
         x: PAD.left + (i / (data.length - 1)) * pw,
         y: PAD.top + ((maxV - v) / range) * ph,
       }));
 
       if (chart.type === "area") {
         const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + ph);
-        grad.addColorStop(0, `${color}55`);
+        grad.addColorStop(0, `${color}44`);
         grad.addColorStop(1, `${color}00`);
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.moveTo(pts[0].x, PAD.top + ph);
-        pts.forEach((p:any) => ctx.lineTo(p.x, p.y));
+        pts.forEach((p: any) => ctx.lineTo(p.x, p.y));
         ctx.lineTo(pts[pts.length - 1].x, PAD.top + ph);
         ctx.closePath();
         ctx.fill();
       }
 
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.lineJoin = "round";
       ctx.beginPath();
-      pts.forEach((p:any, i:any) =>
+      pts.forEach((p: any, i: number) =>
         i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y),
       );
       ctx.stroke();
 
-      // Dots
-      pts.forEach((p:any, i:any) => {
+      pts.forEach((p: any, i: number) => {
         if (i % Math.max(1, Math.floor(pts.length / 8)) === 0) {
-          ctx.fillStyle = color;
+          ctx.fillStyle = C.bgCard;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
           ctx.fill();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+          ctx.stroke();
         }
       });
 
-      // X labels (sparse)
       const step = Math.max(1, Math.floor(data.length / 6));
-      ctx.fillStyle = C.muted;
-      ctx.font = "8px monospace";
+      ctx.fillStyle = C.tx3;
+      ctx.font = "9px monospace";
       ctx.textAlign = "center";
       data.forEach((d: any, i: number) => {
         if (i % step === 0)
@@ -348,145 +270,221 @@ function ChartCard({ chart }: { chart: any }) {
       });
     }
 
-    if (chart.type === "scatter") {
-      const xs = data.map((d: any) => Number(d.x));
-      const ys = data.map((d: any) => Number(d.y));
-      const maxX = Math.max(...xs, 1),
-        minX = Math.min(...xs);
-      const maxY = Math.max(...ys, 1),
-        minY = Math.min(...ys);
-      const rx = maxX - minX || 1,
-        ry = maxY - minY || 1;
-
-      ctx.fillStyle = C.muted;
-      ctx.font = "9px monospace";
-      ctx.textAlign = "right";
-      for (let i = 0; i <= 4; i++) {
-        const v = minY + (ry / 4) * (4 - i);
-        ctx.fillText(v.toFixed(1), PAD.left - 6, PAD.top + (ph / 4) * i + 3);
-      }
-
-      data.forEach((d: any, i: number) => {
-        const cx = PAD.left + ((Number(d.x) - minX) / rx) * pw;
-        const cy = PAD.top + ((maxY - Number(d.y)) / ry) * ph;
-        ctx.fillStyle = PALETTE[i % PALETTE.length];
-        ctx.globalAlpha = 0.8;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      });
-    }
-
     if (chart.type === "pie" || chart.type === "donut") {
       const total =
         data.reduce((s: number, d: any) => s + (d.value || 0), 0) || 1;
-      const cx = W / 2,
-        cy = H / 2;
-      const outerR = Math.min(pw, ph) / 2 - 10;
-      const innerR = chart.type === "donut" ? outerR * 0.5 : 0;
+      const cx = W / 2;
+      const cy = H / 2;
+      const outerR = Math.min(pw, ph) / 2 - 8;
+      const innerR = chart.type === "donut" ? outerR * 0.52 : 0;
       let angle = -Math.PI / 2;
-
       data.forEach((d: any, i: number) => {
         const slice = (d.value / total) * Math.PI * 2;
-        const c2 = d.color || PALETTE[i % PALETTE.length];
+        const c2 = d.color || CHART_PALETTE[i % CHART_PALETTE.length];
         ctx.fillStyle = c2;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.arc(cx, cy, outerR, angle, angle + slice);
         ctx.closePath();
         ctx.fill();
-
-        // Slice label
         const midA = angle + slice / 2;
-        const lx = cx + Math.cos(midA) * (outerR * 0.7);
-        const ly = cy + Math.sin(midA) * (outerR * 0.7);
         const pct = ((d.value / total) * 100).toFixed(0);
         if (parseInt(pct) >= 5) {
           ctx.fillStyle = "#fff";
-          ctx.font = "bold 9px sans-serif";
+          ctx.font = "bold 10px sans-serif";
           ctx.textAlign = "center";
-          ctx.fillText(`${pct}%`, lx, ly);
+          ctx.fillText(
+            `${pct}%`,
+            cx + Math.cos(midA) * outerR * 0.7,
+            cy + Math.sin(midA) * outerR * 0.7 + 4,
+          );
         }
         angle += slice;
       });
-
       if (chart.type === "donut") {
-        ctx.fillStyle = "#07071a";
+        ctx.fillStyle = C.bgCard;
         ctx.beginPath();
         ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = C.text;
-        ctx.font = "bold 14px monospace";
+        ctx.fillStyle = C.tx1;
+        ctx.font = "bold 15px monospace";
         ctx.textAlign = "center";
         ctx.fillText(String(total), cx, cy + 5);
       }
-
-      // Legend
-      const lx0 = 10;
-      data.slice(0, 6).forEach((d: any, i: number) => {
-        const ly0 =
-          H -
-          14 -
-          (data.length <= 3 ? (data.length - 1 - i) * 14 : (5 - i) * 12);
-        const c2 = d.color || PALETTE[i % PALETTE.length];
-        ctx.fillStyle = c2;
-        ctx.fillRect(lx0, ly0 - 7, 8, 8);
-        ctx.fillStyle = C.muted;
-        ctx.font = "8px sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText(String(d.label ?? "").slice(0, 16), lx0 + 11, ly0);
-      });
     }
-  }, [chart]);
+  }, [chart, C]);
 
   return (
     <div
       style={{
-        background: C.bg1,
-        border: `1px solid ${C.border}`,
-        borderRadius: 12,
+        background: C.bgCard,
+        border: `1px solid ${C.rule2}`,
+        borderRadius: 14,
         padding: "1rem",
         marginBottom: "0.875rem",
+        boxShadow: `0 4px 16px ${C.pGlow}, 0 2px 8px rgba(0,0,0,0.08)`,
       }}
     >
       <div
         style={{
-          fontSize: "0.72rem",
-          fontWeight: 600,
-          color: C.text,
-          marginBottom: "0.625rem",
+          fontSize: "0.78rem",
+          fontWeight: 700,
+          color: C.tx1,
+          marginBottom: "0.75rem",
         }}
       >
         {chart.title}
       </div>
       <canvas
         ref={canvasRef}
-        width={W}
-        height={H}
-        style={{ width: "100%", borderRadius: 6, display: "block" }}
+        style={{ width: "100%", display: "block", borderRadius: 8 }}
       />
     </div>
   );
 }
 
-// ── Overview tab ──────────────────────────────────────────────────────────
-function OverviewTab({ analysis, siteType, meta, enriched }: any) {
-  const site = getSiteConfig(siteType);
+// ── Glass card ─────────────────────────────────────────────────────────────
+function GlassCard({
+  children,
+  C,
+  style,
+}: {
+  children: React.ReactNode;
+  C: ReturnType<typeof usePaletteColors>;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      style={{
+        background: C.bgCard,
+        border: `1px solid ${C.rule}`,
+        borderRadius: 14,
+        padding: "1.25rem",
+        marginBottom: "0.875rem",
+        boxShadow: `0 4px 16px ${C.pGlow}, 0 1px 4px rgba(0,0,0,0.06)`,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({
+  children,
+  C,
+}: {
+  children: React.ReactNode;
+  C: ReturnType<typeof usePaletteColors>;
+}) {
+  return (
+    <div
+      style={{
+        fontSize: "0.62rem",
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        color: C.tx3,
+        marginBottom: "0.75rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+      }}
+    >
+      <div style={{ width: 12, height: 1, background: C.tx3 }} />
+      {children}
+    </div>
+  );
+}
+
+function Badge({
+  text,
+  color,
+  C,
+}: {
+  text: string;
+  color?: string;
+  C: ReturnType<typeof usePaletteColors>;
+}) {
+  const c = color ?? C.primary;
+  return (
+    <span
+      style={{
+        fontSize: "0.6rem",
+        padding: "0.18rem 0.5rem",
+        borderRadius: 4,
+        background: `${c}18`,
+        color: c,
+        border: `1px solid ${c}28`,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function ConfBar({
+  pct,
+  color,
+  C,
+}: {
+  pct: number;
+  color: string;
+  C: ReturnType<typeof usePaletteColors>;
+}) {
+  return (
+    <div style={{ marginTop: "0.75rem" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: "0.65rem",
+          color: C.tx3,
+          marginBottom: "0.3rem",
+        }}
+      >
+        <span>Confidence</span>
+        <span style={{ color }}>{pct}%</span>
+      </div>
+      <div
+        style={{
+          height: 5,
+          background: C.rule,
+          borderRadius: 3,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            background: `linear-gradient(90deg,${color}70,${color})`,
+            borderRadius: 3,
+            transition: "width 1.2s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Overview Tab ──────────────────────────────────────────────────────────
+function OverviewTab({ analysis, C }: any) {
   const pred = analysis.prediction ?? {};
   const pct = parseInt(pred.confidence) || 70;
-  const sc = signalColor(pred.result ?? "");
+  const sc = signalColor(pred.result ?? "", C.primary, C.accent);
   const kms = analysis.keyMetrics ?? [];
 
   return (
     <div>
-      {/* Summary */}
-      <GlassCard>
-        <SectionTitle>Executive Summary</SectionTitle>
+      <GlassCard C={C}>
+        <SectionTitle C={C}>Executive Summary</SectionTitle>
         <p
           style={{
             fontSize: "0.875rem",
-            color: C.text,
+            color: C.tx2,
             lineHeight: 1.8,
             margin: 0,
           }}
@@ -495,12 +493,11 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
         </p>
       </GlassCard>
 
-      {/* Key metrics */}
       {kms.length > 0 && (
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))",
+            gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
             gap: "0.625rem",
             marginBottom: "0.875rem",
           }}
@@ -510,17 +507,18 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
               key={i}
               style={{
                 background: C.bg2,
-                border: `1px solid ${C.border}`,
-                borderRadius: 10,
+                border: `1px solid ${C.rule}`,
+                borderRadius: 12,
                 padding: "0.875rem",
                 textAlign: "center",
+                boxShadow: `0 2px 8px ${C.pGlow}`,
               }}
             >
               <div
                 style={{
-                  fontSize: "clamp(0.85rem,2vw,1.15rem)",
+                  fontSize: "clamp(0.85rem,2vw,1.1rem)",
                   fontWeight: 700,
-                  color: PALETTE[i % PALETTE.length],
+                  color: CHART_PALETTE[i % CHART_PALETTE.length],
                   fontFamily: "monospace",
                 }}
               >
@@ -529,7 +527,7 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
               <div
                 style={{
                   fontSize: "0.6rem",
-                  color: C.muted,
+                  color: C.tx3,
                   textTransform: "uppercase",
                   letterSpacing: "0.1em",
                   marginTop: "0.2rem",
@@ -541,7 +539,7 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
                 <div
                   style={{
                     fontSize: "0.62rem",
-                    color: C.dim,
+                    color: C.tx3,
                     marginTop: "0.25rem",
                     lineHeight: 1.4,
                   }}
@@ -554,9 +552,8 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
         </div>
       )}
 
-      {/* Verdict */}
-      <GlassCard style={{ borderColor: `${sc}30` }}>
-        <SectionTitle>AI Verdict</SectionTitle>
+      <GlassCard C={C} style={{ border: `1px solid ${sc}30` }}>
+        <SectionTitle C={C}>AI Verdict</SectionTitle>
         <div
           style={{
             display: "flex",
@@ -576,13 +573,13 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
           >
             {pred.result ?? "—"}
           </div>
-          <Badge text={`${pct}% confidence`} color={sc} />
+          <Badge text={`${pct}% confidence`} color={sc} C={C} />
         </div>
-        <ConfBar pct={pct} color={sc} />
+        <ConfBar pct={pct} color={sc} C={C} />
         <p
           style={{
-            fontSize: "0.8rem",
-            color: C.slate,
+            fontSize: "0.82rem",
+            color: C.tx2,
             lineHeight: 1.75,
             marginTop: "0.875rem",
             marginBottom: 0,
@@ -592,10 +589,9 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
         </p>
       </GlassCard>
 
-      {/* Patterns */}
       {(analysis.patterns ?? []).length > 0 && (
-        <GlassCard>
-          <SectionTitle>Detected Patterns</SectionTitle>
+        <GlassCard C={C}>
+          <SectionTitle C={C}>Detected Patterns</SectionTitle>
           {analysis.patterns.map((p: any, i: number) => (
             <div
               key={i}
@@ -604,37 +600,36 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
                 marginBottom: "0.625rem",
                 borderBottom:
                   i < analysis.patterns.length - 1
-                    ? `1px solid ${C.border}`
+                    ? `1px solid ${C.rule}`
                     : "none",
               }}
             >
               <div
                 style={{
-                  fontSize: "0.8rem",
-                  color: C.text,
+                  fontSize: "0.82rem",
+                  color: C.tx1,
                   fontWeight: 500,
                   marginBottom: "0.2rem",
                 }}
               >
                 {p.pattern}
               </div>
-              <div style={{ fontSize: "0.7rem", color: C.muted }}>
+              <div style={{ fontSize: "0.72rem", color: C.tx3 }}>
                 {p.frequency} ·{" "}
-                <span style={{ color: C.slate }}>{p.significance}</span>
+                <span style={{ color: C.tx2 }}>{p.significance}</span>
               </div>
             </div>
           ))}
         </GlassCard>
       )}
 
-      {/* Best use case */}
       {analysis.bestUseCase && (
-        <GlassCard>
-          <SectionTitle>Recommended Action</SectionTitle>
+        <GlassCard C={C}>
+          <SectionTitle C={C}>Recommended Action</SectionTitle>
           <p
             style={{
-              fontSize: "0.8rem",
-              color: C.slate,
+              fontSize: "0.82rem",
+              color: C.tx2,
               lineHeight: 1.75,
               margin: 0,
             }}
@@ -647,12 +642,242 @@ function OverviewTab({ analysis, siteType, meta, enriched }: any) {
   );
 }
 
-// ── Data tab ──────────────────────────────────────────────────────────────
-function DataTab({ records, siteType, enriched }: any) {
+// ── Charts Tab ────────────────────────────────────────────────────────────
+function ChartsTab({ analysis, C }: any) {
+  const charts: any[] = analysis.charts ?? [];
+  if (!charts.length)
+    return (
+      <GlassCard C={C}>
+        <div style={{ textAlign: "center", padding: "2rem", color: C.tx3 }}>
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📊</div>
+          <div style={{ fontSize: "0.82rem" }}>
+            No chart data for this dataset.
+          </div>
+          <div
+            style={{ fontSize: "0.72rem", marginTop: "0.5rem", color: C.tx3 }}
+          >
+            Fetch more numeric data sources to enable charts.
+          </div>
+        </div>
+      </GlassCard>
+    );
+
+  // Inject palette colors into charts
+  const themedCharts = charts.map((c: any, i: number) => ({
+    ...c,
+    color: c.color || (i % 2 === 0 ? C.primary : C.accent),
+  }));
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.375rem",
+          marginBottom: "1rem",
+        }}
+      >
+        {themedCharts.map((c: any, i: number) => (
+          <Badge
+            key={i}
+            text={c.title?.slice(0, 20) || c.type}
+            color={c.color}
+            C={C}
+          />
+        ))}
+      </div>
+      {themedCharts.map((chart: any, i: number) => (
+        <ChartCard key={i} chart={chart} C={C} />
+      ))}
+    </div>
+  );
+}
+
+// ── Insights Tab ──────────────────────────────────────────────────────────
+function InsightsTab({ analysis, C }: any) {
+  const insights = analysis.insights ?? [];
+  const sc = (s: string) =>
+    s === "high" ? C.primary : s === "medium" ? "#f59e0b" : C.tx3;
+
+  return (
+    <div>
+      <GlassCard C={C}>
+        <SectionTitle C={C}>Data Health</SectionTitle>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3,1fr)",
+            gap: "0.5rem",
+          }}
+        >
+          {[
+            { label: "Completeness", value: "98%", color: "#22c55e" },
+            { label: "Freshness", value: "Live", color: "#f59e0b" },
+            { label: "Verified", value: "✓", color: C.primary },
+          ].map(({ label, value, color }) => (
+            <div
+              key={label}
+              style={{
+                textAlign: "center",
+                padding: "0.75rem",
+                background: C.bg2,
+                borderRadius: 10,
+                border: `1px solid ${C.rule}`,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.95rem",
+                  fontFamily: "monospace",
+                  color,
+                  fontWeight: 600,
+                }}
+              >
+                {value}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.6rem",
+                  color: C.tx3,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  marginTop: "0.2rem",
+                }}
+              >
+                {label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </GlassCard>
+
+      {insights.length === 0 ? (
+        <div style={{ textAlign: "center", color: C.tx3, padding: "2rem" }}>
+          No insights generated
+        </div>
+      ) : (
+        insights.map((ins: any, i: number) => (
+          <div
+            key={i}
+            style={{
+              background: C.bgCard,
+              border: `1px solid ${C.rule}`,
+              borderLeft: `3px solid ${sc(ins.significance)}`,
+              borderRadius: 12,
+              padding: "1rem 1.25rem",
+              marginBottom: "0.625rem",
+              boxShadow: `0 2px 8px ${C.pGlow}`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginBottom: "0.5rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <div
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: sc(ins.significance),
+                }}
+              />
+              <span
+                style={{
+                  fontSize: "0.6rem",
+                  color: sc(ins.significance),
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {ins.significance}
+              </span>
+              {ins.category && (
+                <Badge text={ins.category} color={C.tx3} C={C} />
+              )}
+            </div>
+            <p
+              style={{
+                fontSize: "0.82rem",
+                color: C.tx2,
+                lineHeight: 1.75,
+                margin: 0,
+              }}
+            >
+              {ins.insight}
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+// ── Predictions Tab ───────────────────────────────────────────────────────
+function PredictionsTab({ analysis, C }: any) {
+  const pred = analysis.prediction ?? {};
+  const pct = parseInt(pred.confidence) || 70;
+  const color = signalColor(pred.result ?? "", C.primary, C.accent);
+
+  return (
+    <div>
+      <GlassCard C={C} style={{ border: `1px solid ${color}30` }}>
+        <SectionTitle C={C}>Prediction Verdict</SectionTitle>
+        <div
+          style={{
+            fontSize: "clamp(1.3rem,3vw,2rem)",
+            fontWeight: 800,
+            color,
+            fontFamily: "monospace",
+            marginBottom: "0.5rem",
+          }}
+        >
+          {pred.result ?? "—"}
+        </div>
+        <ConfBar pct={pct} color={color} C={C} />
+        <p
+          style={{
+            fontSize: "0.82rem",
+            color: C.tx2,
+            lineHeight: 1.75,
+            marginTop: "1rem",
+            marginBottom: 0,
+          }}
+        >
+          {pred.reason}
+        </p>
+      </GlassCard>
+
+      {analysis.bestUseCase && (
+        <GlassCard C={C}>
+          <SectionTitle C={C}>Recommended Action</SectionTitle>
+          <p
+            style={{
+              fontSize: "0.82rem",
+              color: C.tx2,
+              lineHeight: 1.75,
+              margin: 0,
+            }}
+          >
+            {analysis.bestUseCase}
+          </p>
+        </GlassCard>
+      )}
+    </div>
+  );
+}
+
+// ── Data Tab ──────────────────────────────────────────────────────────────
+function DataTab({ records, C }: any) {
   const [view, setView] = useState<"cards" | "table">("cards");
   if (!records.length)
     return (
-      <div style={{ textAlign: "center", color: C.muted, padding: "2rem" }}>
+      <div style={{ textAlign: "center", color: C.tx3, padding: "2rem" }}>
         No records
       </div>
     );
@@ -661,7 +886,12 @@ function DataTab({ records, siteType, enriched }: any) {
   return (
     <div>
       <div
-        style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem" }}
+        style={{
+          display: "flex",
+          gap: "0.375rem",
+          marginBottom: "0.875rem",
+          alignItems: "center",
+        }}
       >
         {(["cards", "table"] as const).map((v) => (
           <button
@@ -669,25 +899,19 @@ function DataTab({ records, siteType, enriched }: any) {
             onClick={() => setView(v)}
             style={{
               padding: "0.3rem 0.75rem",
-              borderRadius: 6,
-              fontSize: "0.68rem",
-              border: `1px solid ${view === v ? C.cyan : C.border}`,
-              background: view === v ? `${C.cyan}15` : "transparent",
-              color: view === v ? C.cyan : C.muted,
+              borderRadius: 8,
+              fontSize: "0.7rem",
+              border: `1px solid ${view === v ? C.primary : C.rule2}`,
+              background: view === v ? `${C.primary}15` : "transparent",
+              color: view === v ? C.primary : C.tx3,
               cursor: "pointer",
+              fontWeight: view === v ? 700 : 400,
             }}
           >
-            {v === "cards" ? "Cards" : "Table"}
+            {v === "cards" ? "⊞ Cards" : "⊟ Table"}
           </button>
         ))}
-        <span
-          style={{
-            marginLeft: "auto",
-            fontSize: "0.65rem",
-            color: C.dim,
-            alignSelf: "center",
-          }}
-        >
+        <span style={{ marginLeft: "auto", fontSize: "0.65rem", color: C.tx3 }}>
           {records.length} records
         </span>
       </div>
@@ -698,21 +922,20 @@ function DataTab({ records, siteType, enriched }: any) {
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              fontSize: "0.72rem",
+              fontSize: "0.75rem",
             }}
           >
             <thead>
               <tr>
                 <th
                   style={{
-                    padding: "0.5rem 0.625rem",
+                    padding: "0.5rem 0.75rem",
                     textAlign: "left",
-                    borderBottom: `1px solid ${C.border}`,
-                    color: C.dim,
-                    fontSize: "0.58rem",
+                    boxShadow: `0 1px 0 ${C.rule}`,
+                    color: C.tx3,
+                    fontSize: "0.6rem",
                     letterSpacing: "0.1em",
                     textTransform: "uppercase",
-                    whiteSpace: "nowrap",
                   }}
                 >
                   #
@@ -721,11 +944,11 @@ function DataTab({ records, siteType, enriched }: any) {
                   <th
                     key={k}
                     style={{
-                      padding: "0.5rem 0.625rem",
+                      padding: "0.5rem 0.75rem",
                       textAlign: "left",
-                      borderBottom: `1px solid ${C.border}`,
-                      color: C.dim,
-                      fontSize: "0.58rem",
+                      boxShadow: `0 1px 0 ${C.rule}`,
+                      color: C.tx3,
+                      fontSize: "0.6rem",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       whiteSpace: "nowrap",
@@ -740,12 +963,12 @@ function DataTab({ records, siteType, enriched }: any) {
               {records.map((r: any, i: number) => (
                 <tr
                   key={i}
-                  style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}
+                  style={{ background: i % 2 === 0 ? "transparent" : C.bg2 }}
                 >
                   <td
                     style={{
-                      padding: "0.45rem 0.625rem",
-                      color: C.dim,
+                      padding: "0.45rem 0.75rem",
+                      color: C.tx3,
                       fontFamily: "monospace",
                       fontSize: "0.65rem",
                     }}
@@ -756,9 +979,9 @@ function DataTab({ records, siteType, enriched }: any) {
                     <td
                       key={k}
                       style={{
-                        padding: "0.45rem 0.625rem",
-                        color: C.slate,
-                        maxWidth: 220,
+                        padding: "0.45rem 0.75rem",
+                        color: C.tx2,
+                        maxWidth: 200,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -779,26 +1002,27 @@ function DataTab({ records, siteType, enriched }: any) {
             <div
               key={i}
               style={{
-                background: C.bg1,
-                border: `1px solid ${C.border}`,
-                borderRadius: 10,
+                background: C.bgCard,
+                border: `1px solid ${C.rule}`,
+                borderRadius: 12,
                 padding: "0.875rem 1rem",
                 marginBottom: "0.5rem",
+                boxShadow: `0 2px 8px ${C.pGlow}`,
               }}
             >
               <div
                 style={{
                   fontSize: "0.6rem",
-                  color: C.dim,
+                  color: C.tx3,
                   fontFamily: "monospace",
                   marginBottom: "0.5rem",
                 }}
               >
                 #{String(i + 1).padStart(2, "0")} ·{" "}
-                {r.Source || r.source || r.Category || ""}
+                {r.Source || r.Category || ""}
               </div>
               {Object.entries(r)
-                .filter(([k]) => !["Source", "Category", "source"].includes(k))
+                .filter(([k]) => !["Source", "Category"].includes(k))
                 .map(([k, v]) => (
                   <div
                     key={k}
@@ -806,13 +1030,13 @@ function DataTab({ records, siteType, enriched }: any) {
                       display: "flex",
                       gap: "0.75rem",
                       padding: "0.3rem 0",
-                      borderBottom: `1px solid rgba(255,255,255,0.03)`,
+                      borderBottom: `1px solid ${C.rule}`,
                     }}
                   >
                     <span
                       style={{
                         fontSize: "0.68rem",
-                        color: C.dim,
+                        color: C.tx3,
                         minWidth: 100,
                         flexShrink: 0,
                       }}
@@ -821,8 +1045,8 @@ function DataTab({ records, siteType, enriched }: any) {
                     </span>
                     <span
                       style={{
-                        fontSize: "0.72rem",
-                        color: C.text,
+                        fontSize: "0.75rem",
+                        color: C.tx2,
                         wordBreak: "break-word",
                       }}
                     >
@@ -838,77 +1062,28 @@ function DataTab({ records, siteType, enriched }: any) {
   );
 }
 
-// ── Charts tab ────────────────────────────────────────────────────────────
-function ChartsTab({ analysis, records, enriched }: any) {
-  const charts: any[] = analysis.charts ?? [];
-
-  if (!charts.length) {
-    return (
-      <GlassCard>
-        <div style={{ textAlign: "center", padding: "2rem", color: C.muted }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📊</div>
-          <div style={{ fontSize: "0.82rem", color: C.dim }}>
-            No chart data available for this dataset.
-          </div>
-          <div
-            style={{ fontSize: "0.72rem", color: C.dim, marginTop: "0.5rem" }}
-          >
-            Fetch more numeric data sources to enable charts.
-          </div>
-        </div>
-      </GlassCard>
-    );
-  }
-
-  return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.375rem",
-          marginBottom: "1rem",
-        }}
-      >
-        {charts.map((c: any, i: number) => (
-          <Badge
-            key={i}
-            text={c.title?.slice(0, 20) || c.type}
-            color={c.color || C.cyan}
-          />
-        ))}
-      </div>
-      {charts.map((chart: any, i: number) => (
-        <ChartCard key={i} chart={chart} />
-      ))}
-    </div>
-  );
-}
-
-// ── ML tab ────────────────────────────────────────────────────────────────
-function MLTab({ analysis, records, onDownloadClean }: any) {
+// ── ML Tab ────────────────────────────────────────────────────────────────
+function MLTab({ analysis, records, onDownloadClean, C }: any) {
   const ml = analysis.mlReadiness;
   if (!ml)
     return (
-      <div style={{ textAlign: "center", color: C.muted, padding: "2rem" }}>
+      <div style={{ textAlign: "center", color: C.tx3, padding: "2rem" }}>
         No ML readiness data available.
       </div>
     );
-
   const scoreColor =
     ml.readinessScore >= 70
-      ? C.green
+      ? "#22c55e"
       : ml.readinessScore >= 40
-        ? C.gold
-        : C.red;
+        ? "#f59e0b"
+        : "#ef4444";
   const circumference = 2 * Math.PI * 36;
   const dash = (ml.readinessScore / 100) * circumference;
 
   return (
     <div>
-      {/* Readiness score */}
-      <GlassCard>
-        <SectionTitle>ML Readiness Score</SectionTitle>
+      <GlassCard C={C}>
+        <SectionTitle C={C}>ML Readiness Score</SectionTitle>
         <div
           style={{
             display: "flex",
@@ -931,7 +1106,7 @@ function MLTab({ analysis, records, onDownloadClean }: any) {
                 cy={45}
                 r={36}
                 fill="none"
-                stroke="rgba(255,255,255,0.06)"
+                stroke={C.rule}
                 strokeWidth={8}
               />
               <circle
@@ -971,7 +1146,7 @@ function MLTab({ analysis, records, onDownloadClean }: any) {
               <span
                 style={{
                   fontSize: "0.55rem",
-                  color: C.muted,
+                  color: C.tx3,
                   letterSpacing: "0.1em",
                 }}
               >
@@ -983,7 +1158,7 @@ function MLTab({ analysis, records, onDownloadClean }: any) {
             <div
               style={{
                 fontSize: "0.82rem",
-                color: C.text,
+                color: C.tx1,
                 fontWeight: 600,
                 marginBottom: "0.375rem",
               }}
@@ -994,11 +1169,9 @@ function MLTab({ analysis, records, onDownloadClean }: any) {
                   ? "⚠️ Needs Cleaning"
                   : "❌ Insufficient Data"}
             </div>
-            <div
-              style={{ fontSize: "0.72rem", color: C.muted, lineHeight: 1.6 }}
-            >
+            <div style={{ fontSize: "0.72rem", color: C.tx3, lineHeight: 1.6 }}>
               {ml.totalRows} rows · {ml.totalCols} columns ·{" "}
-              {ml.numericCols.length} numeric · {ml.textCols.length} categorical
+              {ml.numericCols.length} numeric
             </div>
             <div
               style={{
@@ -1009,13 +1182,15 @@ function MLTab({ analysis, records, onDownloadClean }: any) {
               }}
             >
               <Badge
-                text={`${ml.cleanCols.length} clean cols`}
-                color={C.green}
+                text={`${ml.cleanCols.length} clean`}
+                color="#22c55e"
+                C={C}
               />
               {ml.dirtyCols.length > 0 && (
                 <Badge
-                  text={`${ml.dirtyCols.length} dirty cols`}
-                  color={C.red}
+                  text={`${ml.dirtyCols.length} dirty`}
+                  color="#ef4444"
+                  C={C}
                 />
               )}
             </div>
@@ -1023,592 +1198,25 @@ function MLTab({ analysis, records, onDownloadClean }: any) {
         </div>
       </GlassCard>
 
-      {/* Column stats */}
-      {(ml.colStats ?? []).length > 0 && (
-        <GlassCard>
-          <SectionTitle>Numeric Column Statistics</SectionTitle>
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "0.72rem",
-              }}
-            >
-              <thead>
-                <tr>
-                  {["Column", "Min", "Max", "Mean", "Count"].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "0.4rem 0.625rem",
-                        textAlign: "left",
-                        borderBottom: `1px solid ${C.border}`,
-                        color: C.dim,
-                        fontSize: "0.58rem",
-                        letterSpacing: "0.1em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ml.colStats.map((s: any, i: number) => (
-                  <tr
-                    key={i}
-                    style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}
-                  >
-                    <td
-                      style={{
-                        padding: "0.4rem 0.625rem",
-                        color: C.cyan,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {s.col}
-                    </td>
-                    <td
-                      style={{
-                        padding: "0.4rem 0.625rem",
-                        color: C.text,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {s.min}
-                    </td>
-                    <td
-                      style={{
-                        padding: "0.4rem 0.625rem",
-                        color: C.text,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {s.max}
-                    </td>
-                    <td
-                      style={{
-                        padding: "0.4rem 0.625rem",
-                        color: C.text,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {s.mean}
-                    </td>
-                    <td
-                      style={{
-                        padding: "0.4rem 0.625rem",
-                        color: C.muted,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {s.count}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </GlassCard>
-      )}
-
-      {/* Applicable tasks */}
-      <GlassCard>
-        <SectionTitle>Applicable ML Tasks</SectionTitle>
-        <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
-        >
-          {ml.applicableTasks.length > 0 ? (
-            ml.applicableTasks.map((t: string, i: number) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.625rem",
-                  padding: "0.625rem 0.75rem",
-                  background: C.bg2,
-                  borderRadius: 8,
-                }}
-              >
-                <span
-                  style={{
-                    color: PALETTE[i % PALETTE.length],
-                    fontSize: "0.75rem",
-                  }}
-                >
-                  ▸
-                </span>
-                <span style={{ fontSize: "0.78rem", color: C.text }}>{t}</span>
-              </div>
-            ))
-          ) : (
-            <div style={{ fontSize: "0.75rem", color: C.muted }}>
-              No ML tasks applicable — need more numeric data.
-            </div>
-          )}
-        </div>
-      </GlassCard>
-
-      {/* Suggested target / features */}
-      {ml.suggestedTarget && (
-        <GlassCard>
-          <SectionTitle>Suggested Model Setup</SectionTitle>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "0.75rem",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: "0.6rem",
-                  color: C.muted,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  marginBottom: "0.3rem",
-                }}
-              >
-                Target Variable
-              </div>
-              <div
-                style={{
-                  fontSize: "0.82rem",
-                  color: C.cyan,
-                  fontFamily: "monospace",
-                  fontWeight: 600,
-                }}
-              >
-                {ml.suggestedTarget}
-              </div>
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: "0.6rem",
-                  color: C.muted,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  marginBottom: "0.3rem",
-                }}
-              >
-                Feature Columns
-              </div>
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  color: C.text,
-                  fontFamily: "monospace",
-                  lineHeight: 1.6,
-                }}
-              >
-                {(ml.suggestedFeatures ?? []).join(", ") || "—"}
-              </div>
-            </div>
-          </div>
-        </GlassCard>
-      )}
-
-      {/* Recommended models */}
-      {(ml.recommendedModels ?? []).length > 0 && (
-        <GlassCard>
-          <SectionTitle>Recommended Models</SectionTitle>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem" }}>
-            {ml.recommendedModels.map((m: string, i: number) => (
-              <Badge key={i} text={m} color={PALETTE[i % PALETTE.length]} />
-            ))}
-          </div>
-        </GlassCard>
-      )}
-
-      {/* Cleaning steps */}
-      {(ml.cleaningSteps ?? []).length > 0 && (
-        <GlassCard>
-          <SectionTitle>Data Cleaning Checklist</SectionTitle>
-          {ml.cleaningSteps.map((step: string, i: number) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                gap: "0.625rem",
-                padding: "0.5rem 0",
-                borderBottom:
-                  i < ml.cleaningSteps.length - 1
-                    ? `1px solid ${C.border}`
-                    : "none",
-              }}
-            >
-              <span
-                style={{
-                  color: step.startsWith("⚠") ? C.gold : C.green,
-                  flexShrink: 0,
-                  marginTop: 1,
-                }}
-              >
-                {step.startsWith("⚠") ? "⚠" : "✓"}
-              </span>
-              <span style={{ fontSize: "0.75rem", color: C.slate }}>
-                {step.replace(/^[⚠✓]\s*/, "")}
-              </span>
-            </div>
-          ))}
-        </GlassCard>
-      )}
-
-      {/* ML suggestion from AI */}
-      {analysis.mlSuggestion && (
-        <GlassCard>
-          <SectionTitle>AI Model Recommendation</SectionTitle>
-          <p
-            style={{
-              fontSize: "0.8rem",
-              color: C.slate,
-              lineHeight: 1.75,
-              margin: 0,
-            }}
-          >
-            {analysis.mlSuggestion}
-          </p>
-        </GlassCard>
-      )}
-
-      {/* Download cleaned CSV */}
       <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
         <button
           onClick={onDownloadClean}
           style={{
             padding: "0.75rem 2rem",
-            borderRadius: 10,
+            borderRadius: 12,
             border: "none",
-            background: `linear-gradient(135deg,${C.cyan},#00c8d4)`,
-            color: "#04040a",
+            background: `linear-gradient(135deg,${C.accent},${C.primary})`,
+            color: "#fff",
             fontSize: "0.82rem",
             fontWeight: 700,
             cursor: "pointer",
+            boxShadow: `0 4px 16px ${C.aGlow}`,
             letterSpacing: "0.04em",
           }}
         >
           ⬇ Download ML-Ready CSV
         </button>
-        <div
-          style={{ fontSize: "0.62rem", color: C.muted, marginTop: "0.375rem" }}
-        >
-          Missing values filled · Numeric columns only
-        </div>
       </div>
-    </div>
-  );
-}
-
-// ── Insights tab ──────────────────────────────────────────────────────────
-function InsightsTab({ analysis, siteType }: any) {
-  const insights = analysis.insights ?? [];
-  const sc = (s: string) =>
-    s === "high" ? C.cyan : s === "medium" ? C.gold : C.dim;
-
-  return (
-    <div>
-      <GlassCard>
-        <SectionTitle>Data Health</SectionTitle>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3,1fr)",
-            gap: "0.5rem",
-          }}
-        >
-          {[
-            { label: "Completeness", value: "98%", color: C.green },
-            { label: "Freshness", value: "Live", color: C.gold },
-            { label: "Verified", value: "✓", color: C.cyan },
-          ].map(({ label, value, color }) => (
-            <div
-              key={label}
-              style={{
-                textAlign: "center",
-                padding: "0.75rem",
-                background: C.bg2,
-                borderRadius: 8,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "0.9rem",
-                  fontFamily: "monospace",
-                  color,
-                  fontWeight: 600,
-                }}
-              >
-                {value}
-              </div>
-              <div
-                style={{
-                  fontSize: "0.58rem",
-                  color: C.muted,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  marginTop: "0.2rem",
-                }}
-              >
-                {label}
-              </div>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
-
-      {insights.length === 0 ? (
-        <div style={{ textAlign: "center", color: C.muted, padding: "2rem" }}>
-          No insights generated
-        </div>
-      ) : (
-        insights.map((ins: any, i: number) => (
-          <div
-            key={i}
-            style={{
-              background: C.bg2,
-              border: `1px solid ${C.border}`,
-              borderLeft: `3px solid ${sc(ins.significance)}`,
-              borderRadius: 10,
-              padding: "1rem 1.25rem",
-              marginBottom: "0.625rem",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                marginBottom: "0.5rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <div
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: sc(ins.significance),
-                  flexShrink: 0,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: "0.58rem",
-                  color: sc(ins.significance),
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {ins.significance}
-              </span>
-              {ins.category && <Badge text={ins.category} color={C.dim} />}
-              {ins.dataPoint && (
-                <span
-                  style={{
-                    fontSize: "0.62rem",
-                    color: C.muted,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {String(ins.dataPoint).slice(0, 40)}
-                </span>
-              )}
-            </div>
-            <p
-              style={{
-                fontSize: "0.82rem",
-                color: C.text,
-                lineHeight: 1.75,
-                margin: 0,
-              }}
-            >
-              {ins.insight}
-            </p>
-          </div>
-        ))
-      )}
-
-      {analysis.scenarios && (
-        <GlassCard>
-          <SectionTitle>Scenario Analysis</SectionTitle>
-          {Object.entries(analysis.scenarios).map(
-            ([key, val]: [string, any]) => (
-              <div key={key} style={{ marginBottom: "0.875rem" }}>
-                <div
-                  style={{
-                    fontSize: "0.68rem",
-                    color:
-                      key === "bull"
-                        ? C.green
-                        : key === "bear"
-                          ? C.red
-                          : C.gold,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  {key === "bull"
-                    ? "🟢 Bull Case"
-                    : key === "bear"
-                      ? "🔴 Bear Case"
-                      : "🟡 Base Case"}
-                </div>
-                <p
-                  style={{
-                    fontSize: "0.78rem",
-                    color: C.slate,
-                    margin: 0,
-                    lineHeight: 1.7,
-                  }}
-                >
-                  {val}
-                </p>
-              </div>
-            ),
-          )}
-        </GlassCard>
-      )}
-    </div>
-  );
-}
-
-// ── Predictions tab ───────────────────────────────────────────────────────
-function PredictionsTab({ analysis, siteType, enriched }: any) {
-  const pred = analysis.prediction ?? {};
-  const pct = parseInt(pred.confidence) || 70;
-  const color = signalColor(pred.result ?? "");
-
-  return (
-    <div>
-      <GlassCard
-        style={{ borderColor: `${color}30`, background: `${color}06` }}
-      >
-        <SectionTitle>Prediction Verdict</SectionTitle>
-        <div
-          style={{
-            fontSize: "clamp(1.3rem,3vw,2rem)",
-            fontWeight: 800,
-            color,
-            fontFamily: "monospace",
-            marginBottom: "0.5rem",
-          }}
-        >
-          {pred.result ?? "—"}
-        </div>
-        <ConfBar pct={pct} color={color} />
-        <p
-          style={{
-            fontSize: "0.82rem",
-            color: C.slate,
-            lineHeight: 1.75,
-            marginTop: "1rem",
-            marginBottom: 0,
-          }}
-        >
-          {pred.reason}
-        </p>
-      </GlassCard>
-
-      {siteType === "finance_deep" && enriched?.sentiment && (
-        <GlassCard>
-          <SectionTitle>News Sentiment Breakdown</SectionTitle>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3,1fr)",
-              gap: "0.625rem",
-              marginBottom: "0.875rem",
-            }}
-          >
-            {[
-              {
-                label: "Bullish",
-                count: enriched.sentiment.bullish,
-                color: C.green,
-              },
-              {
-                label: "Neutral",
-                count: enriched.sentiment.neutral,
-                color: C.gold,
-              },
-              {
-                label: "Bearish",
-                count: enriched.sentiment.bearish,
-                color: C.red,
-              },
-            ].map(({ label, count, color: c }) => {
-              const t =
-                enriched.sentiment.bullish +
-                  enriched.sentiment.neutral +
-                  enriched.sentiment.bearish || 1;
-              return (
-                <div
-                  key={label}
-                  style={{
-                    textAlign: "center",
-                    padding: "1rem 0.5rem",
-                    background: `${c}08`,
-                    border: `1px solid ${c}20`,
-                    borderRadius: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "1.5rem",
-                      fontWeight: 700,
-                      color: c,
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {count}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.6rem",
-                      color: C.muted,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                    }}
-                  >
-                    {label}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.65rem",
-                      color: c,
-                      marginTop: "0.2rem",
-                    }}
-                  >
-                    {Math.round((count / t) * 100)}%
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </GlassCard>
-      )}
-
-      {analysis.bestUseCase && (
-        <GlassCard>
-          <SectionTitle>Recommended Action</SectionTitle>
-          <p
-            style={{
-              fontSize: "0.82rem",
-              color: C.slate,
-              lineHeight: 1.75,
-              margin: 0,
-            }}
-          >
-            {analysis.bestUseCase}
-          </p>
-        </GlassCard>
-      )}
     </div>
   );
 }
@@ -1624,7 +1232,7 @@ export function AixplorePanel({
   onRescrape,
 }: Props) {
   const [tab, setTab] = useState<Tab>("overview");
-  const site = getSiteConfig(siteType);
+  const C = usePaletteColors();
   analysis._records = records;
 
   function downloadCleanCSV() {
@@ -1636,19 +1244,18 @@ export function AixplorePanel({
         (k) => !isNaN(parseFloat(String(records[0][k]))),
       );
     const cols = numCols.length > 0 ? numCols : Object.keys(records[0]);
-    const rows = records.map((r) => {
-      const row: any = {};
-      cols.forEach((k: string) => {
-        const v = String(r[k] ?? "")
-          .replace(/[₹$,%]/g, "")
-          .trim();
-        row[k] = isNaN(parseFloat(v)) ? "0" : parseFloat(v);
-      });
-      return row;
-    });
     const csv = [
       cols.join(","),
-      ...rows.map((r: any) => cols.map((k: string) => r[k]).join(",")),
+      ...records.map((r: any) =>
+        cols
+          .map((k: string) => {
+            const v = String(r[k] ?? "")
+              .replace(/[₹$,%]/g, "")
+              .trim();
+            return isNaN(parseFloat(v)) ? "0" : parseFloat(v);
+          })
+          .join(","),
+      ),
     ].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -1656,23 +1263,24 @@ export function AixplorePanel({
     a.click();
   }
 
-  const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: "overview", label: "Overview", icon: "◈" },
-    { key: "data", label: "Data", icon: "⊞" },
-    { key: "charts", label: "Charts", icon: "⬡" },
-    { key: "insights", label: "Insights", icon: "◉" },
-    { key: "ml", label: "ML", icon: "⬡" },
-    { key: "predictions", label: "Predict", icon: "◆" },
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "overview", label: "Overview" },
+    { key: "data", label: "Data" },
+    { key: "charts", label: "Charts" },
+    { key: "insights", label: "Insights" },
+    { key: "ml", label: "ML" },
+    { key: "predictions", label: "Predict" },
   ];
 
   return (
     <div
       style={{
-        background: C.bg0,
-        border: `1px solid ${C.border}`,
+        background: C.bgCard,
+        border: `1px solid ${C.rule2}`,
         borderRadius: 16,
         overflow: "hidden",
-        fontFamily: "'DM Sans',sans-serif",
+        fontFamily: "var(--font-body)",
+        boxShadow: `0 8px 32px ${C.pGlow}, 0 2px 12px rgba(0,0,0,0.10)`,
       }}
     >
       {/* Header */}
@@ -1681,17 +1289,17 @@ export function AixplorePanel({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "1rem 1.5rem",
-          background: "rgba(255,255,255,0.02)",
-          borderBottom: `1px solid ${C.border}`,
+          padding: "0.875rem 1.375rem",
+          background: C.bg2,
+          boxShadow: `0 1px 0 ${C.rule}`,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
           <span
             style={{
-              color: site.color,
-              fontSize: "0.9rem",
-              fontWeight: 700,
+              color: C.primary,
+              fontSize: "0.875rem",
+              fontWeight: 800,
               letterSpacing: "0.06em",
             }}
           >
@@ -1699,26 +1307,16 @@ export function AixplorePanel({
           </span>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.375rem",
-              padding: "0.25rem 0.625rem",
-              background: `${site.color}12`,
-              border: `1px solid ${site.color}25`,
+              padding: "0.2rem 0.625rem",
+              background: `${C.primary}15`,
+              border: `1px solid ${C.primary}30`,
               borderRadius: 100,
+              fontSize: "0.68rem",
+              color: C.primary,
+              letterSpacing: "0.06em",
             }}
           >
-            <span style={{ fontSize: "0.75rem" }}>{site.icon}</span>
-            <span
-              style={{
-                fontSize: "0.6rem",
-                color: site.color,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              {site.label}
-            </span>
+            Data Intelligence
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -1726,9 +1324,9 @@ export function AixplorePanel({
             onClick={onRescrape}
             style={{
               background: C.bg2,
-              border: `1px solid ${C.border}`,
-              color: C.muted,
-              padding: "0.375rem 0.875rem",
+              border: `1px solid ${C.rule2}`,
+              color: C.tx2,
+              padding: "0.35rem 0.875rem",
               borderRadius: 8,
               fontSize: "0.72rem",
               cursor: "pointer",
@@ -1740,8 +1338,8 @@ export function AixplorePanel({
             onClick={onClose}
             style={{
               background: C.bg2,
-              border: `1px solid ${C.border}`,
-              color: C.muted,
+              border: `1px solid ${C.rule2}`,
+              color: C.tx2,
               width: 32,
               height: 32,
               borderRadius: 8,
@@ -1761,9 +1359,9 @@ export function AixplorePanel({
       <div
         style={{
           display: "flex",
-          borderBottom: `1px solid ${C.border}`,
+          borderBottom: `1px solid ${C.rule}`,
           padding: "0 0.75rem",
-          background: "rgba(255,255,255,0.01)",
+          background: C.bgCard,
           overflowX: "auto",
         }}
       >
@@ -1778,26 +1376,25 @@ export function AixplorePanel({
               background: "none",
               border: "none",
               cursor: "pointer",
-              color: tab === t.key ? site.color : C.dim,
+              color: tab === t.key ? C.primary : C.tx3,
               borderBottom:
                 tab === t.key
-                  ? `2px solid ${site.color}`
+                  ? `2px solid ${C.primary}`
                   : "2px solid transparent",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.3rem",
-              transition: "color 0.2s",
               textTransform: "uppercase",
               whiteSpace: "nowrap",
+              transition: "color 0.2s",
+              fontWeight: tab === t.key ? 700 : 400,
             }}
           >
             {t.label}
             {t.key === "charts" && (analysis.charts?.length ?? 0) > 0 && (
               <span
                 style={{
+                  marginLeft: 4,
                   fontSize: "0.55rem",
-                  background: `${site.color}30`,
-                  color: site.color,
+                  background: `${C.primary}25`,
+                  color: C.primary,
                   borderRadius: 10,
                   padding: "0 4px",
                 }}
@@ -1817,41 +1414,21 @@ export function AixplorePanel({
           overflowY: "auto",
         }}
       >
-        {tab === "overview" && (
-          <OverviewTab
-            analysis={analysis}
-            siteType={siteType}
-            meta={meta}
-            enriched={enriched}
-          />
-        )}
-        {tab === "data" && (
-          <DataTab records={records} siteType={siteType} enriched={enriched} />
-        )}
+        {tab === "overview" && <OverviewTab analysis={analysis} C={C} />}
+        {tab === "data" && <DataTab records={records} C={C} />}
         {tab === "charts" && (
-          <ChartsTab
-            analysis={analysis}
-            records={records}
-            enriched={enriched}
-          />
+          <ChartsTab analysis={analysis} records={records} C={C} />
         )}
-        {tab === "insights" && (
-          <InsightsTab analysis={analysis} siteType={siteType} />
-        )}
+        {tab === "insights" && <InsightsTab analysis={analysis} C={C} />}
         {tab === "ml" && (
           <MLTab
             analysis={analysis}
             records={records}
             onDownloadClean={downloadCleanCSV}
+            C={C}
           />
         )}
-        {tab === "predictions" && (
-          <PredictionsTab
-            analysis={analysis}
-            siteType={siteType}
-            enriched={enriched}
-          />
-        )}
+        {tab === "predictions" && <PredictionsTab analysis={analysis} C={C} />}
       </div>
     </div>
   );

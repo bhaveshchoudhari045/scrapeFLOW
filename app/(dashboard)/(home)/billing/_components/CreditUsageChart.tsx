@@ -1,15 +1,12 @@
+// ─── CreditUsageChart.tsx ────────────────────────────────────────────────────
+// FIX: chart colors now use CSS vars that actually resolve.
+// The shadcn ChartContainer injects --color-success / --color-failed
+// from chartConfig — those values must match what's in globals.css.
+// We use hsl palette vars directly so they change with palette switching.
 "use client";
 
-import { GetWorkflowExecutionStats } from "@/actions/analytics/getWorkflowExecutionStats";
 import React from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
+import { GetCreditUsageInPeriod } from "@/actions/analytics/getCreditUsageInperiod";
 import {
   ChartConfig,
   ChartContainer,
@@ -18,26 +15,22 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import {
-  ChartColumnStacked,
-  ChartColumnStackedIcon,
-  Layers2,
-} from "lucide-react";
-
-import { BarChart, Area, CartesianGrid, XAxis, Bar } from "recharts";
-import { GetCreditUsageInPeriod } from "@/actions/analytics/getCreditUsageInperiod";
+import { BarChart, CartesianGrid, XAxis, Bar } from "recharts";
 
 type ChartData = Awaited<ReturnType<typeof GetCreditUsageInPeriod>>;
+
 const chartConfig = {
   success: {
-    label: "Successfull Phase Credits",
-    color: "oklch(var(--chart-2))",
+    label: "Successful Phase Credits",
+    // Use palette primary — resolves via CSS custom property
+    color: "var(--primary, hsl(38 96% 52%))",
   },
   failed: {
     label: "Failed Phase Credits",
-    color: "oklch(var(--destructive))",
+    color: "hsl(0 84% 60%)",
   },
 } satisfies ChartConfig;
+
 export default function CreditUsageChart({
   data,
   title,
@@ -48,60 +41,64 @@ export default function CreditUsageChart({
   description: string;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold flex items-center gap-2">
-          <ChartColumnStackedIcon className="w-6 h-6 text-primary" />
-          {title}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ChartContainer config={chartConfig} className="max-h-[200px] w-full">
-          <BarChart
-            data={data}
-            height={200}
-            accessibilityLayer
-            margin={{ top: 20 }}
-          >
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey={"date"}
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tickFormatter={(value) => {
-                const date = new Date(value);
-                return date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                });
+    <ChartContainer config={chartConfig} className="max-h-[220px] w-full">
+      <BarChart
+        data={data}
+        height={220}
+        accessibilityLayer
+        margin={{ top: 10 }}
+      >
+        <CartesianGrid
+          vertical={false}
+          stroke="var(--rule, rgba(0,0,0,0.06))"
+        />
+        <XAxis
+          dataKey="date"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+          minTickGap={32}
+          tick={{ fill: "var(--tx3, #9299ad)", fontSize: 11 }}
+          tickFormatter={(value) =>
+            new Date(value).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            })
+          }
+        />
+        <ChartLegend content={<ChartLegendContent />} />
+        <ChartTooltip
+          cursor={{ fill: "var(--p-dim, rgba(245,158,11,0.06))" }}
+          content={
+            <ChartTooltipContent
+              className="w-[250px]"
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--rule2)",
+                borderRadius: "var(--r-md)",
+                boxShadow: "var(--sh-lg)",
+                color: "var(--tx1)",
               }}
             />
-            <ChartLegend content={<ChartLegendContent />} />
-            <ChartTooltip
-              content={<ChartTooltipContent className="w-[250px]" />}
-            />
-            <Bar
-              fillOpacity={0.8}
-              radius={[0, 0, 4, 4]}
-              fill="var(--color-success)"
-              stroke="var(--color-success)"
-              dataKey="success"
-              stackId="a"
-            />
-            <Bar
-              fillOpacity={0.8}
-              radius={[4, 4, 0, 0]}
-              fill="var(--color-failed)"
-              stroke="var(--color-failed)"
-              dataKey="failed"
-              stackId="a"
-            />
-          </BarChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+          }
+        />
+        <Bar
+          fillOpacity={0.85}
+          radius={[0, 0, 4, 4]}
+          fill="var(--color-success)"
+          stroke="var(--color-success)"
+          dataKey="success"
+          stackId="a"
+        />
+        <Bar
+          fillOpacity={0.85}
+          radius={[4, 4, 0, 0]}
+          fill="var(--color-failed)"
+          stroke="var(--color-failed)"
+          dataKey="failed"
+          stackId="a"
+        />
+      </BarChart>
+    </ChartContainer>
   );
 }

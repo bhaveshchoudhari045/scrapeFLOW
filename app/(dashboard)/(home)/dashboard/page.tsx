@@ -1,15 +1,19 @@
+// ─── app/(dashboard)/page.tsx ────────────────────────────────────────────────
+// FIX: removed StatsCard shadcn Card wrapper (now uses stat-card CSS class)
+// FIX: removed chart shadcn Card wrapper (now uses chart-card CSS class)
+// FIX: full-width — no max-width container
 import { GetPeriods } from "@/actions/analytics/getPeriods";
 import React, { Suspense } from "react";
-import PeriodSelector from "../_components/PeriodSelector";
+import PeriodSelector from "@/app/(dashboard)/(home)/_components/PeriodSelector";
 import { Period } from "@/types/analytics";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GetStatsCardsValues } from "@/actions/analytics/getStatsCardsValues";
 import { CirclePlayIcon, CoinsIcon, WaypointsIcon } from "lucide-react";
-import StatsCard from "../_components/StatsCard";
 import { GetWorkflowExecutionStats } from "@/actions/analytics/getWorkflowExecutionStats";
-import ExecutionStatusChart from "../_components/ExecutionStatusChart";
+import ExecutionStatusChart from "@/app/(dashboard)/(home)/_components/ExecutionStatusChart";
 import { GetCreditUsageInPeriod } from "@/actions/analytics/getCreditUsageInperiod";
-import CreditUsageChart from "../billing/_components/CreditUsageChart";
+import CreditUsageChart from "@/app/(dashboard)/(home)/billing/_components/CreditUsageChart";
+import ReactCountUpWrapper from "@/components/ReactCountUpWrapper";
 
 function HomePage({
   searchParams,
@@ -17,15 +21,17 @@ function HomePage({
   searchParams: { month?: string; year?: string };
 }) {
   const currentDate = new Date();
-  const { month, year } = searchParams;
   const period: Period = {
-    month: month ? parseInt(month) : currentDate.getMonth(),
-    year: year ? parseInt(year) : currentDate.getFullYear(),
+    month: searchParams.month
+      ? parseInt(searchParams.month)
+      : currentDate.getMonth(),
+    year: searchParams.year
+      ? parseInt(searchParams.year)
+      : currentDate.getFullYear(),
   };
 
   return (
     <div className="page-content">
-      {/* Header */}
       <div className="pg-header">
         <div>
           <h1 className="pg-title">Dashboard</h1>
@@ -55,16 +61,16 @@ function HomePage({
 
       {/* Execution Status Chart */}
       <Suspense
-        fallback={<Skeleton className="w-full h-[320px] rounded-2xl" />}
+        fallback={<Skeleton className="w-full h-[320px] rounded-2xl mb-6" />}
       >
-        <StatsExecutionStatus selectedPeriod={period} />
+        <ExecutionStatusWrapper selectedPeriod={period} />
       </Suspense>
 
       {/* Credits Usage Chart */}
       <Suspense
         fallback={<Skeleton className="w-full h-[320px] rounded-2xl" />}
       >
-        <CreditsUsageInPeriod selectedPeriod={period} />
+        <CreditUsageWrapper selectedPeriod={period} />
       </Suspense>
     </div>
   );
@@ -88,7 +94,9 @@ async function StatsCards({ selectedPeriod }: { selectedPeriod: Period }) {
           <CirclePlayIcon size={20} strokeWidth={1.75} />
         </div>
         <div className="stat-card-label">Workflow Executions</div>
-        <div className="stat-card-value">{data.workflowExecutions}</div>
+        <div className="stat-card-value">
+          <ReactCountUpWrapper value={data.workflowExecutions} />
+        </div>
         <CirclePlayIcon
           size={80}
           className="stat-card-watermark"
@@ -100,7 +108,9 @@ async function StatsCards({ selectedPeriod }: { selectedPeriod: Period }) {
           <WaypointsIcon size={20} strokeWidth={1.75} />
         </div>
         <div className="stat-card-label">Phase Executions</div>
-        <div className="stat-card-value">{data.phaseExecutions}</div>
+        <div className="stat-card-value">
+          <ReactCountUpWrapper value={data.phaseExecutions} />
+        </div>
         <WaypointsIcon
           size={80}
           className="stat-card-watermark"
@@ -112,14 +122,16 @@ async function StatsCards({ selectedPeriod }: { selectedPeriod: Period }) {
           <CoinsIcon size={20} strokeWidth={1.75} />
         </div>
         <div className="stat-card-label">Credits Consumed</div>
-        <div className="stat-card-value">{data.creditsConsumed}</div>
+        <div className="stat-card-value">
+          <ReactCountUpWrapper value={data.creditsConsumed} />
+        </div>
         <CoinsIcon size={80} className="stat-card-watermark" strokeWidth={1} />
       </div>
     </div>
   );
 }
 
-async function StatsExecutionStatus({
+async function ExecutionStatusWrapper({
   selectedPeriod,
 }: {
   selectedPeriod: Period;
@@ -143,7 +155,7 @@ async function StatsExecutionStatus({
   );
 }
 
-async function CreditsUsageInPeriod({
+async function CreditUsageWrapper({
   selectedPeriod,
 }: {
   selectedPeriod: Period;

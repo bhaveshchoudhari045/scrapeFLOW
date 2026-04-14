@@ -1,81 +1,114 @@
 import React, { Suspense } from "react";
-import { LockKeyholeIcon, ShieldIcon } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { LockKeyholeIcon, ShieldCheckIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GetCredentialsForUser } from "@/actions/credentials/getCredentialsForUser";
-import { Card } from "@/components/ui/card";
 import CreateCredentialDialog from "./_components/CreateCredentialDialog";
-import { formatDistanceToNow } from "date-fns";
 import DeleteCredentialDialog from "./_components/DeleteCredentialDialog";
+import { formatDistanceToNow } from "date-fns";
+
 export default function CredentialsPage() {
   return (
-    <div className="flex flex-1 flex-col h-full">
-      <div className="flex justify-between">
-        <div className="flex flex-col">
-          <h1 className="text-3xl font-bold">Credentials</h1>
-          <p className="text-muted-foreground">Manage your credentials</p>
-          <CreateCredentialDialog />
+    <div className="page-content">
+      {/* Page Header */}
+      <div className="pg-header">
+        <div>
+          <h1 className="pg-title">Credentials</h1>
+          <p className="pg-subtitle">
+            Manage your encrypted authentication credentials
+          </p>
+        </div>
+        <CreateCredentialDialog />
+      </div>
+
+      {/* Encryption notice */}
+      <div className="encrypt-alert">
+        <div className="encrypt-alert-icon">
+          <ShieldCheckIcon size={16} />
+        </div>
+        <div>
+          <div className="encrypt-alert-title">End-to-end Encrypted</div>
+          <div className="encrypt-alert-desc">
+            All credentials are encrypted at rest using AES-256. Your secrets
+            are never stored in plain text.
+          </div>
         </div>
       </div>
 
-      <div className="h-full py-6 space-y-8">
-        <Alert>
-          <ShieldIcon className="h-4 w-4 stroke-primary" />
-          <AlertTitle className="text-primary">Encryption</AlertTitle>
-          <AlertDescription>
-            All information is securly encrypted, ensuring your data remains
-            safe
-          </AlertDescription>
-        </Alert>
-        <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
-          <UserCredentials />
-        </Suspense>
-      </div>
+      <Suspense
+        fallback={
+          <div className="cred-list">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-[72px] w-full rounded-2xl" />
+            ))}
+          </div>
+        }
+      >
+        <UserCredentials />
+      </Suspense>
     </div>
   );
 }
+
 async function UserCredentials() {
   const credentials = await GetCredentialsForUser();
+
   if (!credentials) {
-    return <div>Something went wrong</div>;
-  }
-  if (credentials.length === 0) {
     return (
-      <Card className="w-full p-4">
-        <div className="flex flex-col gap-4 items-center justify-center">
-          <div className="rounded-full bg-accent w-20 h-20 flex items-center justify-center">
-            <ShieldIcon size={40} className="stroke-primary" />
-          </div>
-          <div className="flex flex-col gap-1 text-center">
-            <p className="text-bold">No credentials created yet</p>
-            <p className="text-sm text-muted-foreground">
-              Click the button below to create your first credential
-            </p>
-          </div>
-          <CreateCredentialDialog triggerText="Create your first credential" />
-        </div>
-      </Card>
+      <div
+        style={{
+          background: "rgba(239,68,68,0.06)",
+          border: "1px solid rgba(239,68,68,0.18)",
+          borderRadius: "var(--r-md)",
+          padding: "1rem 1.25rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          fontSize: "0.875rem",
+          color: "#ef4444",
+        }}
+      >
+        Something went wrong. Please try again later.
+      </div>
     );
   }
+
+  if (credentials.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">
+          <ShieldCheckIcon size={28} strokeWidth={1.5} />
+        </div>
+        <div className="empty-state-title">No credentials yet</div>
+        <div className="empty-state-sub">
+          Store your first encrypted credential to enable authenticated
+          scraping.
+        </div>
+        <CreateCredentialDialog triggerText="Add your first credential" />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex gap-2 flex-wrap">
+    <div className="cred-list">
       {credentials.map((credential) => {
         const createdAt = formatDistanceToNow(credential.createdAt, {
           addSuffix: true,
         });
         return (
-          <Card key={credential.id} className="w-full p-4 flex justify-between">
-            <div className="flex gap-2 items-center">
-              <div className="rounded-full bg-primary/10 w-8 h-8 flex items-center justify-center">
-                <LockKeyholeIcon size={18} className="stroke-primary" />
+          <div key={credential.id} className="cred-card">
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}
+            >
+              <div className="cred-icon">
+                <LockKeyholeIcon size={17} />
               </div>
               <div>
-                <p className="font-bold">{credential.name}</p>
-                <p className="text-xs text-muted-foreground">{createdAt}</p>
+                <div className="cred-name">{credential.name}</div>
+                <div className="cred-date">Added {createdAt}</div>
               </div>
             </div>
             <DeleteCredentialDialog name={credential.name} />
-          </Card>
+          </div>
         );
       })}
     </div>

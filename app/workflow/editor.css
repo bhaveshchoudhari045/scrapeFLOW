@@ -1,0 +1,424 @@
+/* ================================================================
+   FLOWSCRAPE — EDITOR, TOPBAR, EXECUTION VIEWER CSS
+   Covers:
+   - ReactFlow controls (issue 6 — white buttons in dark mode)
+   - Node depth shadows
+   - Edge palette glow
+   - Topbar theming
+   - TaskMenu theming
+   - ExecutionViewer theming (issue 7)
+   - ExecutionsTable theming
+   ================================================================ */
+
+/* ================================================================
+   REACT FLOW CONTROLS  (issue 6 — white/invisible in dark mode)
+   ================================================================ */
+.react-flow__controls {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--rule2) !important;
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--sh-lg) !important;
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background: var(--bg-card) !important;
+  border-bottom: 1px solid var(--rule) !important;
+  color: var(--tx2) !important;
+  fill: var(--tx2) !important;
+  width: 34px !important;
+  height: 34px !important;
+  transition: all 0.18s ease !important;
+}
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+.react-flow__controls-button:hover {
+  background: var(--p-dim) !important;
+  color: var(--primary) !important;
+  fill: var(--primary) !important;
+  box-shadow: inset 0 0 0 1px var(--p-dim) !important;
+}
+/* SVG paths inside controls */
+.react-flow__controls-button svg path {
+  fill: currentColor !important;
+}
+/* Minimap */
+.react-flow__minimap {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--rule2) !important;
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--sh-md) !important;
+}
+/* Panel background */
+.react-flow__panel {
+  background: transparent !important;
+}
+/* Background dots color */
+.react-flow__background {
+  color: var(--rule2) !important;
+}
+/* Edge default color + palette glow */
+.react-flow__edge-path {
+  stroke: hsl(var(--a-h, 226) var(--a-s, 92%) var(--a-l, 58%) / 0.7) !important;
+  stroke-width: 2 !important;
+  filter: drop-shadow(0 0 4px var(--a-glow)) !important;
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--accent) !important;
+  stroke-width: 2.5 !important;
+  filter: drop-shadow(0 0 8px var(--a-glow)) !important;
+}
+/* Animated edge dashes */
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 5 !important;
+  animation: dash 0.5s linear infinite !important;
+}
+@keyframes dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+/* Node wrapper shadow — depth effect */
+.react-flow__node {
+  filter: drop-shadow(0 4px 12px var(--p-glow)) !important;
+  transition: filter 0.2s ease !important;
+}
+.react-flow__node:hover,
+.react-flow__node.selected {
+  filter: drop-shadow(0 8px 24px var(--p-glow))
+    drop-shadow(0 2px 8px var(--a-glow)) !important;
+}
+
+/* Node selection ring */
+.react-flow__node.selected > * {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
+  border-radius: var(--r-md) !important;
+}
+
+/* Handle (connection port) */
+.react-flow__handle {
+  background: var(--accent) !important;
+  border: 2px solid var(--bg-card) !important;
+  box-shadow: 0 0 6px var(--a-glow) !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+.react-flow__handle:hover {
+  box-shadow:
+    0 0 12px var(--a-glow),
+    0 0 4px var(--accent) !important;
+  transform: scale(1.3) !important;
+}
+
+/* ================================================================
+   TOPBAR (workflow editor topbar)
+   ================================================================ */
+.workflow-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.875rem;
+  height: 56px;
+  background: var(--bg-card);
+  /* Depth shadow instead of border-b */
+  box-shadow:
+    0 1px 0 var(--rule),
+    0 3px 16px rgba(0, 0, 0, 0.06),
+    0 1px 6px var(--p-glow);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+/* Patch the existing Topbar component's header tag */
+header.flex.p-2.border-b-2 {
+  background: var(--bg-card) !important;
+  border-bottom: none !important;
+  box-shadow:
+    0 1px 0 var(--rule),
+    0 3px 16px rgba(0, 0, 0, 0.06),
+    0 1px 6px var(--p-glow) !important;
+}
+
+/* ================================================================
+   TASK MENU (left panel of editor)
+   ================================================================ */
+.task-menu-root {
+  background: var(--bg-card);
+  box-shadow:
+    2px 0 16px rgba(0, 0, 0, 0.06),
+    1px 0 0 var(--rule),
+    2px 0 8px var(--p-glow);
+  border-right: none !important;
+}
+/* Patch TaskMenu aside tag */
+aside.w-\[340px\] {
+  background: var(--bg-card) !important;
+  border-right: none !important;
+  box-shadow:
+    2px 0 16px rgba(0, 0, 0, 0.06),
+    1px 0 0 var(--rule),
+    2px 0 8px var(--p-glow) !important;
+}
+/* Task menu header */
+aside.w-\[340px\] > div:first-child {
+  background: var(--bg-card) !important;
+  border-bottom: 1px solid var(--rule) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+/* Task menu header h2 */
+aside.w-\[340px\] h2 {
+  color: var(--tx1) !important;
+  background-image: linear-gradient(
+    135deg,
+    var(--primary-lt),
+    var(--primary-dp)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+/* Task buttons */
+aside.w-\[340px\] button {
+  color: var(--tx2) !important;
+  border-radius: var(--r-sm) !important;
+  transition: all 0.18s ease !important;
+  border-left-color: transparent !important;
+}
+aside.w-\[340px\] button:hover {
+  background: var(--p-dim) !important;
+  color: var(--primary) !important;
+  border-left-color: var(--primary) !important;
+  box-shadow: inset 0 0 0 1px var(--p-dim) !important;
+}
+
+/* ================================================================
+   EXECUTION VIEWER (issue 7)
+   ================================================================ */
+
+/* Aside sidebar in execution viewer */
+.execution-aside {
+  background: var(--bg-card);
+  box-shadow:
+    2px 0 16px rgba(0, 0, 0, 0.06),
+    1px 0 0 var(--rule),
+    2px 0 8px var(--p-glow);
+  border-right: none !important;
+}
+
+/* Patch the aside with Tailwind classes */
+aside.w-\[440px\] {
+  background: var(--bg-card) !important;
+  border-right: none !important;
+  box-shadow:
+    2px 0 16px rgba(0, 0, 0, 0.06),
+    1px 0 0 var(--rule),
+    2px 0 8px var(--p-glow) !important;
+}
+
+/* Execution labels */
+.execution-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  box-shadow: 0 1px 0 var(--rule);
+}
+.execution-label-row:last-child {
+  box-shadow: none;
+}
+.execution-label-icon {
+  color: var(--tx3);
+}
+.execution-label-value {
+  font-weight: 600;
+  color: var(--tx1);
+  background-image: linear-gradient(
+    135deg,
+    var(--primary-lt),
+    var(--primary-dp)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Phase buttons */
+.execution-phase-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  color: var(--tx2);
+  font-size: 0.875rem;
+}
+.execution-phase-btn:hover {
+  background: var(--p-dim);
+  color: var(--primary);
+}
+.execution-phase-btn.active {
+  background: var(--p-dim);
+  color: var(--primary);
+  box-shadow:
+    inset 0 0 0 1px var(--p-dim),
+    0 2px 8px var(--p-glow);
+  font-weight: 600;
+}
+
+/* Parameter viewer card */
+.param-card {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-md);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.param-card-header {
+  padding: 0.875rem 1.25rem;
+  background: var(--bg-2) !important; /* fix bg-gray-50 */
+  box-shadow: 0 1px 0 var(--rule);
+}
+.param-card-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--tx1);
+  font-family: var(--font-display);
+}
+.param-card-sub {
+  font-size: 0.775rem;
+  color: var(--tx3);
+  margin-top: 0.15rem;
+}
+.param-card-body {
+  padding: 1rem 1.25rem;
+}
+
+/* Input fields in param viewer */
+.param-card input[readonly] {
+  background: var(--bg-2) !important;
+  color: var(--tx1) !important;
+  border-color: var(--rule2) !important;
+}
+
+/* Log viewer */
+.log-card {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-md);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.log-card-header {
+  padding: 0.875rem 1.25rem;
+  background: var(--bg-2) !important;
+  box-shadow: 0 1px 0 var(--rule);
+}
+.log-table th {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx3);
+  padding: 0.5rem 1rem;
+  box-shadow: 0 1px 0 var(--rule);
+}
+.log-table td {
+  padding: 0.4rem 1rem;
+  color: var(--tx2);
+  font-size: 0.8125rem;
+  box-shadow: 0 1px 0 var(--rule);
+}
+.log-table tr:last-child td {
+  box-shadow: none;
+}
+.log-table tr:hover td {
+  background: var(--bg-2);
+}
+
+/* ── Patch all Card components on execution viewer to use theme ── */
+/* bg-gray-50 → bg-2 */
+.dark .bg-gray-50 {
+  background: var(--bg-2) !important;
+}
+.bg-gray-50 {
+  background: var(--bg-2) !important;
+}
+
+/* ================================================================
+   EXECUTIONS TABLE (run history page)
+   ================================================================ */
+.executions-table-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-md);
+  overflow: hidden;
+}
+/* Patch the border + shadow on the existing div */
+div.border.rounded-lg.shadow-md {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--rule) !important;
+  box-shadow: var(--sh-md) !important;
+  border-radius: var(--r-lg) !important;
+}
+/* Table header */
+.bg-muted {
+  background: var(--bg-2) !important;
+}
+/* Table rows */
+table tbody tr:hover {
+  background: var(--bg-2) !important;
+}
+table thead th {
+  color: var(--tx3) !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}
+
+/* ================================================================
+   SCHEDULER DIALOG (issue 4)
+   ================================================================ */
+.scheduler-cron-preview {
+  border-radius: var(--r-md) !important;
+  padding: 0.875rem 1rem !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s ease !important;
+}
+.scheduler-cron-preview.valid {
+  background: var(--p-dim) !important;
+  border: 1px solid hsl(var(--p-h, 38) var(--p-s, 96%) var(--p-l, 52%) / 0.3) !important;
+  color: var(--primary) !important;
+  box-shadow: 0 2px 8px var(--p-glow) !important;
+}
+.scheduler-cron-preview.invalid {
+  background: rgba(239, 68, 68, 0.06) !important;
+  border: 1px solid rgba(239, 68, 68, 0.25) !important;
+  color: #ef4444 !important;
+}
+
+/* ================================================================
+   THEME PALETTE BAR POSITION FIX (issue 5)
+   Move it to bottom-left so it doesn't overlap FlowScrape's
+   bottom-right CTA bar / AIXPLORE button.
+   ================================================================ */
+div[role="toolbar"][aria-label="Theme controls"] {
+  bottom: 1.25rem !important;
+  left: 1.25rem !important;
+  right: auto !important;
+}

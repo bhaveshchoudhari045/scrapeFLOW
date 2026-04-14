@@ -1,3 +1,6 @@
+// ============================================================
+// Logo.tsx — single-hue primary gradient, no cross-color bleed
+// ============================================================
 "use client";
 
 import { cn } from "@/lib/utils";
@@ -10,67 +13,46 @@ interface LogoProps {
   iconSize?: number;
 }
 
-function Logo({ fontSize = "text-2xl", iconSize = 20 }: LogoProps) {
+export default function Logo({
+  fontSize = "text-2xl",
+  iconSize = 20,
+}: LogoProps) {
   const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  if (!mounted) {
-    // Prevent hydration mismatch by showing nothing during SSR
-    return null;
-  }
+  if (!mounted) return null;
 
   return (
     <Link
       href="/"
       className={cn(
-        "flex items-center gap-2 group transition-transform duration-200 hover:scale-105",
+        "flex items-center gap-2.5 group transition-transform duration-200 hover:scale-[1.03] select-none",
         fontSize,
       )}
     >
-      {/* Logo Icon with Dual-Color Gradient */}
-      <div
-        className="relative rounded-xl p-2 transition-all duration-300 shadow-md group-hover:shadow-lg"
-        style={{
-          background:
-            "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-          boxShadow: "0 4px 14px var(--primary-glow)",
-        }}
-      >
+      {/* Icon — PRIMARY single-hue gradient */}
+      <div className="logo-icon-bg relative rounded-xl p-2 shrink-0 transition-all duration-300">
         <SquareDashedMousePointer size={iconSize} className="stroke-white" />
-
-        {/* Glow effect on hover */}
+        {/* Bloom on hover */}
         <div
-          className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-md -z-10"
-          style={{
-            background:
-              "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-          }}
+          className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-lg -z-10"
+          style={{ background: "var(--primary-lt)" }}
         />
       </div>
 
-      {/* Logo Text with Dual-Color */}
+      {/* "Flow" = PRIMARY gradient, "Scrape" = neutral */}
       <div className="flex items-center">
-        <span
-          className="font-bold transition-all duration-300"
-          style={{
-            backgroundImage:
-              "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-          }}
-        >
+        <span className="font-black logo-text-gradient transition-all duration-300">
           Flow
         </span>
-        <span className="font-bold text-stone-700 dark:text-stone-300 transition-colors duration-300">
+        <span
+          className="font-black transition-colors duration-300"
+          style={{ color: "var(--tx2)" }}
+        >
           Scrape
         </span>
       </div>
     </Link>
   );
 }
-
-export default Logo;
