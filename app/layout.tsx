@@ -42,7 +42,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider
-      afterSignOutUrl={"/sign-in"}
+      afterSignOutUrl={"/"}
       appearance={{
         elements: {
           formButtonPrimary:

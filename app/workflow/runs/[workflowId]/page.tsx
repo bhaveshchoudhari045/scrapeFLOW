@@ -11,7 +11,8 @@ export default function ExecutionsPage({
   params: { workflowId: string };
 }) {
   return (
-    <div className="h-full w-full overflow-auto">
+    <div className="h-full w-full flex flex-col overflow-auto">
+      {" "}
       <Topbar
         workflowId={params.workflowId}
         hideButtons

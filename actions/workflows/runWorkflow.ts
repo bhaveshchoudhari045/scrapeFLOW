@@ -74,7 +74,7 @@ export async function RunWorkflow(form: {
               status: ExecutionPhaseStatus.CREATED,
               number: phase.phase,
               node: JSON.stringify(node),
-              name: TaskRegistry[node.data.type].label,
+              name: TaskRegistry[node.data.type]?.label ?? "Unknown",
             };
           });
         }),

@@ -759,3 +759,77 @@
     justify-content: center;
   }
 }
+/* ================================================================
+   LANDING PAGE LAYOUT PATCHES
+   Append these rules to the END of your landing.css file.
+   All values are self-contained — no external var() dependencies
+   that could cause errors.
+   ================================================================ */
+
+/* ── 1. Feature grid: always exactly 4 columns ── */
+.lp-features-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 1rem !important;
+}
+@media (max-width: 1080px) {
+  .lp-features-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 560px) {
+  .lp-features-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── 2. Pricing grid: 3 equal columns, cards stretch to same height ── */
+.lp-pricing-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 1.25rem !important;
+  align-items: stretch !important; /* all rows same height */
+}
+@media (max-width: 860px) {
+  .lp-pricing-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── 3. Pricing card internals: flex column so CTA sits at bottom ── */
+.lp-price-card {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  /* Remove the scale transform that caused height mismatch */
+  transform: none !important;
+}
+
+/* Featured card: elevation via shadow only, NOT scale */
+.lp-price-card.featured {
+  transform: none !important;
+  /* Safe shadow using only standard CSS — no var() that might be missing */
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 2px rgba(100, 130, 255, 0.35) !important;
+}
+
+/* Hover states — safe transforms */
+.lp-price-card:hover {
+  transform: translateY(-4px) !important;
+}
+
+/* Push the feature list to fill space so CTA aligns at bottom */
+.lp-price-features {
+  flex: 1 !important;
+  margin-bottom: 1.25rem !important;
+}
+
+/* Ensure CTA button always sits at the bottom */
+.lp-price-card .lp-btn-primary-lg,
+.lp-price-card .lp-btn-ghost-lg {
+  margin-top: auto !important;
+  width: 100% !important;
+  justify-content: center !important;
+}

@@ -1,13 +1,15 @@
 "use client";
-import { Button } from "@/components/ui/button";
+
+import { UnpublishWorkflow } from "@/actions/workflows/unpublishWorkflow";
 import { useMutation } from "@tanstack/react-query";
 import { DownloadIcon } from "lucide-react";
-import { UnpublishWorkflow } from "@/actions/workflows/unpublishWorkflow";
+import React from "react";
 import { toast } from "sonner";
+import { ThemedButton } from "./ThemedButton";
 
 export default function UnpublishBtn({ workflowId }: { workflowId: string }) {
   const mutation = useMutation({
-    mutationFn: (id: string) => UnpublishWorkflow(id),
+    mutationFn: async (id: string) => await UnpublishWorkflow(id),
     onSuccess: () => {
       toast.success("Workflow unpublished", { id: workflowId });
     },
@@ -17,17 +19,16 @@ export default function UnpublishBtn({ workflowId }: { workflowId: string }) {
   });
 
   return (
-    <Button
-      variant={"outline"}
-      className="flex items-center gap-2"
-      disabled={mutation.isPending}
+    <ThemedButton
+      variant="danger"
+      loading={mutation.isPending}
+      icon={<DownloadIcon size={14} />}
       onClick={() => {
-        toast.loading("Unpublishing workflow...", { id: workflowId });
+        toast.loading("Unpublishing...", { id: workflowId });
         mutation.mutate(workflowId);
       }}
     >
-      <DownloadIcon size={16} className="stroke-orange-400" />
       Unpublish
-    </Button>
+    </ThemedButton>
   );
 }

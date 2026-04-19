@@ -18,6 +18,7 @@ export default function ExecutionViewerPage({
         title="Workflow run details"
         subtitle={`Run Id: ${params.executionId}`}
         hideButtons
+      
       />
       <section className="flex h-full overflow-auto">
         <Suspense

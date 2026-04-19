@@ -12,6 +12,8 @@ import {
   Lock,
   Workflow,
   Download,
+  Clock,
+  Globe,
 } from "lucide-react";
 
 const FEATURES = [
@@ -49,6 +51,18 @@ const FEATURES = [
     icon: LineChart,
     title: "Real-time Analytics",
     desc: "Live dashboard showing execution stats, credit usage, and performance metrics.",
+    alt: true,
+  },
+  {
+    icon: Clock,
+    title: "Scheduled Scraping",
+    desc: "Set it and forget it. Run workflows on a cron schedule and get fresh data automatically.",
+    alt: false,
+  },
+  {
+    icon: Globe,
+    title: "Proxy Rotation",
+    desc: "Built-in rotating proxy pool to bypass rate limits and scrape at scale without getting blocked.",
     alt: true,
   },
 ];
@@ -196,7 +210,7 @@ export default function LandingPage() {
 
         <div className="lp-stats">
           {[
-            { label: "Pages Scraped", value: "500K+" },
+            { label: "Pages Scraped", value: "500+" },
             { label: "Uptime", value: "99.9%" },
             { label: "AI Models", value: "3" },
             { label: "Data Sources", value: "12+" },

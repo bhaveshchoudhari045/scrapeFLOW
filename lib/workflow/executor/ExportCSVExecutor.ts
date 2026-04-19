@@ -24,6 +24,18 @@ export const ExportCSVExecutor = async (
       // It is already a list/object, so we use it directly
       data = rawInput;
     }
+    data = data
+      .map((item) => {
+        if (typeof item === "string") {
+          try {
+            return JSON.parse(item); // convert string → object
+          } catch {
+            return null;
+          }
+        }
+        return item;
+      })
+      .filter((item) => item && typeof item === "object");
 
     // Handle wrapped data from sentiment/summarizer (e.g., { data: [...], overall_sentiment: "..." })
     if (
@@ -82,16 +94,23 @@ export const ExportCSVExecutor = async (
     // Add Header Row
     rows.push(columns.map(escapeCSV).join(","));
     // Add Data Rows
+    // Add Data Rows
     for (const item of data) {
-      const row = columns.map((col) => escapeCSV(item[col]));
+      // 🔥 ensure item is not nested
+      const flatItem = item.data ? item.data : item;
+
+      const row = columns.map((col) => {
+        const value = flatItem[col];
+        return escapeCSV(value ?? "");
+      });
+
       rows.push(row.join(","));
     }
 
     // --- THE FIX IS HERE ---
     // We add "\uFEFF" (The BOM) to the start.
     // This forces Excel to read symbols like ₹ correctly.
-    const csvContent = "\uFEFF" + rows.join("\n");
-
+    const csvContent = "\uFEFF" + rows.join("\r\n");
     // Get filename from input or use default
     const filename = environment.getInput("Filename") || "export";
     const fullFilename = filename.endsWith(".csv")

@@ -16,7 +16,6 @@ import { Edge } from "@xyflow/react";
 import { LogCollector } from "@/types/log";
 import { createLogCollector } from "../log";
 
-// ── Loop state type for array/repeat/until loops ──
 interface LoopState {
   loopEndNodeId: string;
   bodyNodeIds: string[];
@@ -50,9 +49,8 @@ export async function ExecuteWorkflow(executionId: string, nextRunAt?: Date) {
   );
   await initializePhaseStatuses(execution);
 
-  let creditConsumed = 0;
+  let creditConsumed = 10;
 
-  // ── Replaced simple for-loop with runExecutionLoop for loop/branch support ──
   const executionFailed = await runExecutionLoop(
     execution,
     environment,
@@ -73,7 +71,6 @@ export async function ExecuteWorkflow(executionId: string, nextRunAt?: Date) {
   revalidatePath("/workflow/runs");
 }
 
-// ── Main execution loop with loop and branching support ──
 async function runExecutionLoop(
   executionData: any,
   environment: Environment,
@@ -89,7 +86,6 @@ async function runExecutionLoop(
     const phase = executionData.phases[phaseIndex];
     const node = JSON.parse(phase.node) as AppNode;
 
-    // ── Skip phase if upstream branch excluded it ──
     if (shouldSkipPhaseForBranching(node, edges, environment)) {
       environment.phases[node.id] = {
         inputs: {},
@@ -103,7 +99,6 @@ async function runExecutionLoop(
       continue;
     }
 
-    // ── LOOP_START handling ──
     const isLoopStart = [
       "LOOP_START_ARRAY",
       "LOOP_START_REPEAT",
@@ -129,7 +124,6 @@ async function runExecutionLoop(
         const sourceArray = JSON.parse(outputs["__SOURCE_ARRAY__"] || "[]");
 
         if (sourceArray.length === 0) {
-          // Empty array — jump past the matching LOOP_END
           const loopEndNodeId = outputs["__LOOP_END_ID__"];
           const loopEndIdx = executionData.phases.findIndex(
             (p: any) => JSON.parse(p.node).id === loopEndNodeId,
@@ -150,7 +144,6 @@ async function runExecutionLoop(
           loopType: "array",
         });
 
-        // Inject first iteration item
         environment.phases[node.id].outputs["Data"] = JSON.stringify(
           sourceArray[0],
         );
@@ -161,7 +154,10 @@ async function runExecutionLoop(
       continue;
     }
 
-    // ── LOOP_END handling ──
+    // This is the full replacement for the LOOP_END block inside runExecutionLoop
+    // Replace everything from:  if (node.data.type === "LOOP_END") {
+    // through the closing:      phaseIndex++; continue;   of that block
+
     if (node.data.type === "LOOP_END") {
       let parentLoop: LoopState | undefined;
       let parentLoopId: string | undefined;
@@ -175,10 +171,29 @@ async function runExecutionLoop(
       }
 
       if (parentLoop && parentLoopId) {
+        // Find what the last body node produced as "Item Result"
+        // Walk the edges to find what's connected to Loop End's "Item Result" input
+        const loopEndPhaseNode = node;
+        const itemResultEdge = edges.find(
+          (e) =>
+            e.target === loopEndPhaseNode.id &&
+            e.targetHandle === "Item Result",
+        );
+        const currentItemResult = itemResultEdge
+          ? (environment.phases[itemResultEdge.source]?.outputs[
+              itemResultEdge.sourceHandle!
+            ] ?? null)
+          : null;
+
         const preserveInputs: Record<string, string> = {
+          // Pass the already-accumulated array so the executor can append to it
           __LOOP_ACCUMULATED__: JSON.stringify(parentLoop.accumulatedResults),
-          __LOOP_SUCCESS_COUNT__: String(parentLoop.accumulatedResults.length),
         };
+
+        // Pass the current item result so the executor can append it
+        if (currentItemResult !== null) {
+          preserveInputs["Item Result"] = currentItemResult;
+        }
 
         const continueSignal = parentLoop.bodyNodeIds.some(
           (id) =>
@@ -199,9 +214,13 @@ async function runExecutionLoop(
           break;
         }
 
+        // Read back the updated accumulated array that the executor built
         const accJson =
           environment.phases[node.id]?.outputs["__LOOP_ACCUMULATED__"];
-        if (accJson) parentLoop.accumulatedResults = JSON.parse(accJson);
+
+        if (accJson) {
+          parentLoop.accumulatedResults = JSON.parse(accJson);
+        }
 
         const breakSignal = parentLoop.bodyNodeIds.some(
           (id) => environment.phases[id]?.outputs["__FLOW_BREAK__"] === "true",
@@ -222,7 +241,7 @@ async function runExecutionLoop(
         }
 
         if (parentLoop.currentIndex < parentLoop.sourceArray.length - 1) {
-          // Advance to next iteration
+          // More iterations remaining — advance index and loop back
           parentLoop.currentIndex++;
           environment.phases[parentLoopId] = {
             inputs: {},
@@ -231,16 +250,20 @@ async function runExecutionLoop(
                 parentLoop.sourceArray[parentLoop.currentIndex],
               ),
               "Current Index": String(parentLoop.currentIndex),
+              __LOOP_ACCUMULATED__: JSON.stringify(
+                parentLoop.accumulatedResults,
+              ),
               __SOURCE_ARRAY__: JSON.stringify(parentLoop.sourceArray),
               __LOOP_END_ID__: parentLoop.loopEndNodeId,
               __BODY_NODE_IDS__: JSON.stringify(parentLoop.bodyNodeIds),
             },
           };
 
-          // Reset body node outputs for the next iteration
+          // Reset body node inputs so they re-resolve from edges on next iteration
           for (const bodyId of parentLoop.bodyNodeIds) {
-            if (bodyId !== node.id) {
-              environment.phases[bodyId] = { inputs: {}, outputs: {} };
+            if (bodyId === node.id) continue;
+            if (environment.phases[bodyId]) {
+              environment.phases[bodyId].inputs = {};
             }
           }
 
@@ -250,7 +273,7 @@ async function runExecutionLoop(
           phaseIndex = loopStartIdx !== -1 ? loopStartIdx + 1 : phaseIndex + 1;
           continue;
         } else {
-          // Loop exhausted — emit accumulated results and clean up
+          // All iterations done — finalize and let execution continue past loop
           environment.phases[node.id].outputs["Data"] = JSON.stringify(
             parentLoop.accumulatedResults,
             null,
@@ -258,13 +281,25 @@ async function runExecutionLoop(
           );
           activeLoops.delete(parentLoopId);
         }
+      } else {
+        // Loop End reached with no active loop (e.g. after break/return already cleaned up)
+        const fallbackResult = await executeWorkflowPhase(
+          phase,
+          environment,
+          edges,
+          userId,
+        );
+        onCreditsConsumed(fallbackResult.creditsConsumed);
+        if (!fallbackResult.success) {
+          executionFailed = true;
+          break;
+        }
       }
 
       phaseIndex++;
       continue;
     }
 
-    // ── Normal phase execution ──
     const result = await executeWorkflowPhase(
       phase,
       environment,
@@ -277,13 +312,11 @@ async function runExecutionLoop(
       break;
     }
 
-    // ── FLOW_STOP: halt entire workflow ──
     if (environment.phases[node.id]?.outputs["__FLOW_STOP__"] === "true") {
       executionFailed = true;
       break;
     }
 
-    // ── FLOW_BREAK: exit innermost active loop ──
     if (environment.phases[node.id]?.outputs["__FLOW_BREAK__"] === "true") {
       for (const [loopId, loopState] of activeLoops) {
         if (loopState.bodyNodeIds.includes(node.id)) {
@@ -306,7 +339,6 @@ async function runExecutionLoop(
       continue;
     }
 
-    // ── FLOW_CONTINUE: jump to LOOP_END of innermost loop ──
     let jumped = false;
     if (environment.phases[node.id]?.outputs["__FLOW_CONTINUE__"] === "true") {
       for (const [, loopState] of activeLoops) {
@@ -329,7 +361,6 @@ async function runExecutionLoop(
   return executionFailed;
 }
 
-// ── Returns true if this node should be skipped due to upstream branch logic ──
 function shouldSkipPhaseForBranching(
   node: AppNode,
   edges: Edge[],
@@ -376,14 +407,8 @@ async function initalizeWorkflowExecution(
 
 async function initializePhaseStatuses(execution: any) {
   await prisma.executionPhase.updateMany({
-    where: {
-      id: {
-        in: execution.phases.map((phase: any) => phase.id),
-      },
-    },
-    data: {
-      status: ExecutionPhaseStatus.PENDING,
-    },
+    where: { id: { in: execution.phases.map((p: any) => p.id) } },
+    data: { status: ExecutionPhaseStatus.PENDING },
   });
 }
 
@@ -411,12 +436,9 @@ async function finalizeWorkflowExecution(
       where: { id: workflowId, lastRunId: executionId },
       data: { lastRunStatus: finalStatus },
     })
-    .catch(() => {
-      // Ignore — a newer run has already updated lastRunId
-    });
+    .catch(() => {});
 }
 
-// ── Updated signature: accepts optional preserveInputs for loop boundary phases ──
 async function executeWorkflowPhase(
   phase: ExecutionPhase,
   environment: Environment,
@@ -430,7 +452,6 @@ async function executeWorkflowPhase(
 
   setupEnvironmentForPhase(node, environment, edges);
 
-  // Merge any loop-injected inputs (e.g. __LOOP_ACCUMULATED__) on top of resolved inputs
   if (preserveInputs) {
     Object.assign(environment.phases[node.id].inputs, preserveInputs);
   }
@@ -444,7 +465,7 @@ async function executeWorkflowPhase(
     },
   });
 
-  const creditsRequired = TaskRegistry[node.data.type].credits;
+  const creditsRequired = TaskRegistry[node.data.type]?.credits ?? 0;
   let success = await decrementCredits(userId, creditsRequired, logCollector);
   const creditsConsumed = success ? creditsRequired : 0;
 
@@ -517,8 +538,13 @@ function setupEnvironmentForPhase(
   environment: Environment,
   edges: Edge[],
 ) {
-  environment.phases[node.id] = { inputs: {}, outputs: {} };
-  const inputs = TaskRegistry[node.data.type].inputs;
+  if (!environment.phases[node.id]) {
+    environment.phases[node.id] = { inputs: {}, outputs: {} };
+  } else {
+    environment.phases[node.id].inputs = {};
+  }
+
+  const inputs = TaskRegistry[node.data.type]?.inputs ?? [];
 
   for (const input of inputs) {
     if (input.type === TaskParamType.BROWSER_INSTANCE) continue;
@@ -534,19 +560,27 @@ function setupEnvironmentForPhase(
     );
 
     if (!connectedEdge) {
+      console.error("Missing edge for input", input.name, "node id:", node.id);
+      continue;
+    }
+
+    const sourcePhase = environment.phases[connectedEdge.source];
+    if (!sourcePhase) {
       console.error(
-        "Missing edge for input",
-        input.name,
-        " node id: ",
-        node.id,
+        `Source phase not found for edge: ${connectedEdge.source} -> ${node.id} (input: ${input.name})`,
       );
       continue;
     }
 
-    const outputValue =
-      environment.phases[connectedEdge.source].outputs[
-        connectedEdge.sourceHandle!
-      ];
+    const outputValue = sourcePhase.outputs[connectedEdge.sourceHandle!];
+    if (outputValue === undefined) {
+      console.error(
+        `Output "${connectedEdge.sourceHandle}" missing on node ${connectedEdge.source}. Available:`,
+        Object.keys(sourcePhase.outputs),
+      );
+      continue;
+    }
+
     environment.phases[node.id].inputs[input.name] = outputValue;
   }
 }
@@ -569,12 +603,11 @@ function createExecutionEnvironment(
   };
 }
 
-// ── Closes the Puppeteer browser if one was opened during execution ──
 async function cleanupEnvironment(environment: Environment) {
   if (environment.browser) {
     await environment.browser
       .close()
-      .catch((err) => console.error("Cannot close browser, reason: ", err));
+      .catch((err) => console.error("Cannot close browser, reason:", err));
   }
 }
 

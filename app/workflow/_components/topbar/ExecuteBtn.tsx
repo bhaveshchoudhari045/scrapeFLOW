@@ -3,40 +3,37 @@
 import { RunWorkflow } from "@/actions/workflows/runWorkflow";
 import { toast } from "sonner";
 import useExecutionPlan from "@/components/hooks/useExecutionPlan";
-import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { PlayIcon } from "lucide-react";
 import React from "react";
 import { useReactFlow } from "@xyflow/react";
+import { ThemedButton } from "./ThemedButton";
 
-function ExecuteBtn({ workflowId }: { workflowId: string }) {
+export default function ExecuteBtn({ workflowId }: { workflowId: string }) {
   const generate = useExecutionPlan();
   const { toObject } = useReactFlow();
 
   const mutation = useMutation({
-    mutationFn: async (data: { workflowId: string; flowDefinition?: string }) =>
+    mutationFn: async (data: { workflowId: string; flowDefinition: string }) =>
       await RunWorkflow(data),
     onSuccess: () => {
-      toast.success("Execution started", { id: "flow-execution" });
+      toast.success("Workflow execution started", { id: workflowId });
     },
     onError: (error) => {
-      console.error("Execution error:", error);
-      toast.error("Something went wrong", { id: "flow-execution" });
+      console.log("error:", error);
+      toast.error("Something went wrong", { id: workflowId });
     },
   });
 
   return (
-    <Button
-      variant={"outline"}
-      className="flex items-center gap-2"
-      disabled={mutation.isPending}
+    <ThemedButton
+      variant="ghost"
+      loading={mutation.isPending}
+      icon={<PlayIcon size={14} />}
       onClick={() => {
         const plan = generate();
-        if (!plan) {
-          // useExecutionPlan already showed the appropriate toast
-          return;
-        }
-        toast.loading("Starting execution...", { id: "flow-execution" });
+        if (!plan) return;
+        toast.loading("Executing workflow...", { id: workflowId });
         const flowdef = JSON.parse(JSON.stringify(toObject()));
         mutation.mutate({
           workflowId,
@@ -44,10 +41,7 @@ function ExecuteBtn({ workflowId }: { workflowId: string }) {
         });
       }}
     >
-      <PlayIcon size={16} className="stroke-orange-400" />
       Execute
-    </Button>
+    </ThemedButton>
   );
 }
-
-export default ExecuteBtn;

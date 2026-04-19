@@ -13,6 +13,7 @@ import {
   CircleDashedIcon,
   ClockIcon,
   CoinsIcon,
+  FileDownIcon,
   Loader2Icon,
   LucideIcon,
   WorkflowIcon,
@@ -67,6 +68,17 @@ export default function ExecutionViewer({
     query.data?.completedAt,
   );
   const creditsConsumed = GetPhaseTotalCost(query.data?.phases || []);
+
+  // Check if the currently selected phase has CSV output
+  const hasCsvOutput = (() => {
+    try {
+      if (!phaseDetails.data?.outputs) return false;
+      const outputs = JSON.parse(phaseDetails.data.outputs);
+      return !!outputs["CSV Content"];
+    } catch {
+      return false;
+    }
+  })();
 
   return (
     <div className="flex w-full h-full" style={{ background: "var(--bg-2)" }}>
@@ -336,7 +348,7 @@ export default function ExecutionViewer({
               maxWidth: 860,
             }}
           >
-            {/* Credits + Duration badges */}
+            {/* Credits + Duration + CSV Download badges row */}
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
               {[
                 {
@@ -378,6 +390,11 @@ export default function ExecutionViewer({
                   </span>
                 </div>
               ))}
+
+              {/* CSV download button — only visible on Export to CSV phase */}
+              {hasCsvOutput && selectedPhase && (
+                <CSVDownloadButton phaseId={selectedPhase} />
+              )}
             </div>
 
             <ParamaterViewer
@@ -395,6 +412,70 @@ export default function ExecutionViewer({
         )}
       </div>
     </div>
+  );
+}
+
+// ── CSV Download Button ──
+function CSVDownloadButton({ phaseId }: { phaseId: string }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleDownload = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/download-csv?phaseId=${phaseId}`);
+      if (!response.ok) {
+        alert("CSV not available for this phase.");
+        return;
+      }
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="(.+?)"/);
+      const filename = match ? match[1] : "export.csv";
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Download failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={loading}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        padding: "0.4rem 1rem",
+        background: "var(--p-dim)",
+        border:
+          "1px solid hsl(var(--p-h,38) var(--p-s,96%) var(--p-l,52%) / 0.22)",
+        borderRadius: "var(--r-pill)",
+        boxShadow: "0 2px 6px var(--p-glow)",
+        fontSize: "0.8125rem",
+        color: "var(--primary)",
+        fontWeight: 600,
+        cursor: loading ? "not-allowed" : "pointer",
+        opacity: loading ? 0.6 : 1,
+        transition: "opacity 0.2s",
+      }}
+    >
+      {loading ? (
+        <Loader2Icon size={14} className="animate-spin" />
+      ) : (
+        <FileDownIcon size={14} />
+      )}
+      {loading ? "Downloading..." : "Download CSV"}
+    </button>
   );
 }
 

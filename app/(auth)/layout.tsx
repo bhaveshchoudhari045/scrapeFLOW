@@ -1,5 +1,4 @@
 import React from "react";
-import Logo from "@/components/Logo";
 import "./auth.css";
 
 export default function AuthLayout({
@@ -12,14 +11,12 @@ export default function AuthLayout({
       {/* Left — decorative brand panel */}
       <div className="auth-left">
         <div className="auth-left-content">
-          {/* Logo */}
           <div className="auth-logo">
             <div className="auth-logo-mark">FS</div>
             <span className="auth-logo-text">FlowScrape</span>
           </div>
         </div>
 
-        {/* Tagline */}
         <div className="auth-tagline">
           <h2>
             Automate the
@@ -32,26 +29,20 @@ export default function AuthLayout({
           </p>
 
           <div className="auth-features">
-            <div className="auth-feature">
-              <span className="auth-feature-dot" />
-              Visual workflow builder with 50+ node types
-            </div>
-            <div className="auth-feature">
-              <span className="auth-feature-dot" />
-              AI-powered data extraction and analysis
-            </div>
-            <div className="auth-feature">
-              <span className="auth-feature-dot" />
-              Scheduled runs with real-time monitoring
-            </div>
-            <div className="auth-feature">
-              <span className="auth-feature-dot" />
-              Encrypted credential management
-            </div>
+            {[
+              "Visual workflow builder with 50+ node types",
+              "AI-powered data extraction and analysis",
+              "Scheduled runs with real-time monitoring",
+              "Encrypted credential management",
+            ].map((f) => (
+              <div key={f} className="auth-feature">
+                <span className="auth-feature-dot" />
+                {f}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Decorative grid lines */}
         <div className="auth-grid-lines" aria-hidden="true">
           {Array.from({ length: 6 }).map((_, i) => (
             <div

@@ -36,11 +36,9 @@ export async function GetStatsCardsValues(period: Period) {
     },
   });
 
-
-
   const stats = {
     workflowExecutions: executions.length,
-    creditsConsumed: 0,
+    creditsConsumed: 10,
     phaseExecutions: 0,
   };
 

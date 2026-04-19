@@ -3,6 +3,6 @@ import { TaskRegistry } from "./task/registry";
 
 export function CalculateWorkflowCost(nodes: AppNode[]) {
   return nodes.reduce((acc, node) => {
-    return acc + TaskRegistry[node.data.type].credits;
+    return acc + (TaskRegistry[node.data.type]?.credits ?? 0);
   }, 0);
 }
